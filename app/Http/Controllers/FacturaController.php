@@ -132,6 +132,8 @@ class FacturaController extends Controller
             $enviado = false;
         }
 
+        $cuerpo = mb_substr($cuerpo, 0, 60000);
+
         $pendiente->update([
             'enviado' => $enviado,
             'respuesta' => $cuerpo,

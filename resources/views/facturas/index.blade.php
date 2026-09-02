@@ -241,6 +241,7 @@
                     cambio = true;
                 } catch (err) {
                     status.textContent = err.message || 'Error inesperado';
+                    enviarBtn.disabled = false;
                 }
             });
         })();
