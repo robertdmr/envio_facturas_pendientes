@@ -3,7 +3,7 @@
 @section('title', 'Factura '.$factura->NroFactura)
 
 @php
-    $money = fn ($value) => number_format((float) $value, 2, ',', '.');
+    $money = fn ($value) => number_format((float) $value, 0, ',', '.');
     $qty = fn ($value) => rtrim(rtrim(number_format((float) $value, 3, '.', ''), '0'), '.');
     $fecha = fn ($value) => ($value && $value !== '0000-00-00 00:00:00')
         ? \Carbon\Carbon::parse($value)->format('d/m/Y H:i')

@@ -3,7 +3,7 @@
 @section('title', 'Listado de facturas')
 
 @php
-    $money = fn ($value) => number_format((float) $value, 2, ',', '.');
+    $money = fn ($value) => number_format((float) $value, 0, ',', '.');
     $q = request()->query('q', '');
     $desde = request()->query('desde', '');
     $hasta = request()->query('hasta', '');
@@ -22,22 +22,22 @@
             <div class="xl:col-span-2">
                 <label for="q" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">N° factura</label>
                 <input type="text" id="q" name="q" value="{{ $q }}" placeholder="001-001-0000000"
-                       class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="desde" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Desde</label>
                 <input type="date" id="desde" name="desde" value="{{ $desde }}"
-                       class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="hasta" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Hasta</label>
                 <input type="date" id="hasta" name="hasta" value="{{ $hasta }}"
-                       class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
                 <label for="tipo" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Tipo</label>
                 <select id="tipo" name="tipo"
-                        class="block w-full rounded-lg border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">Todos</option>
                     @foreach ($tipos as $opcion)
                         <option value="{{ $opcion }}" @selected($tipo === $opcion)>{{ $opcion }}</option>
