@@ -162,9 +162,14 @@
             const respuesta = document.getElementById('json-respuesta');
             const enviarBtn = document.getElementById('json-enviar');
             let nroActual = null;
+            let cambio = false;
 
             const close = () => {
                 modal.classList.add('hidden');
+                if (cambio) {
+                    window.location.reload();
+                    return;
+                }
                 nroActual = null;
                 enviarBtn.disabled = true;
             };
@@ -178,6 +183,7 @@
             document.querySelectorAll('.js-generar-json').forEach((btn) => {
                 btn.addEventListener('click', async () => {
                     nroActual = btn.dataset.factura;
+                    cambio = false;
                     content.textContent = 'Generando…';
                     status.textContent = '';
                     respuesta.classList.add('hidden');
@@ -202,6 +208,7 @@
                         content.textContent = JSON.stringify(data.payload, null, 2);
                         status.textContent = 'Guardado como pendiente de envío · ' + data.nrofactura;
                         enviarBtn.disabled = false;
+                        cambio = true;
                     } catch (err) {
                         mostrarError(err.message);
                     }
@@ -231,6 +238,7 @@
                         : 'Respuesta del endpoint (no aceptado) · ' + data.nrofactura;
                     respuesta.textContent = data.respuesta || '(sin respuesta)';
                     respuesta.classList.remove('hidden');
+                    cambio = true;
                 } catch (err) {
                     status.textContent = err.message || 'Error inesperado';
                 }
