@@ -102,7 +102,11 @@ class FacturaController extends Controller
 
         FacturaPendiente::query()->updateOrCreate(
             ['nrofactura' => $factura->NroFactura],
-            ['payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)]
+            [
+                'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
+                'enviado' => false,
+                'respuesta' => null,
+            ]
         );
 
         return response()->json([
@@ -133,7 +137,7 @@ class FacturaController extends Controller
             $enviado = false;
         }
 
-        $cuerpo = mb_substr($cuerpo, 0, 60000);
+        $cuerpo = mb_strcut($cuerpo, 0, 60000);
 
         $pendiente->update([
             'enviado' => $enviado,

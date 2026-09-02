@@ -60,13 +60,19 @@ class GenerarJsonTest extends TestCase
         $nro = $this->nroContado();
 
         $this->postJson('/facturas/'.$nro.'/json')->assertOk();
-        FacturaPendiente::query()->where('nrofactura', $nro)->update(['payload' => 'VALOR_VIEJO']);
+        FacturaPendiente::query()->where('nrofactura', $nro)->update([
+            'payload' => 'VALOR_VIEJO',
+            'enviado' => true,
+            'respuesta' => 'respuesta-previa',
+        ]);
 
         $this->postJson('/facturas/'.$nro.'/json')->assertOk();
 
-        $payload = FacturaPendiente::query()->where('nrofactura', $nro)->value('payload');
-        $this->assertNotSame('VALOR_VIEJO', $payload);
-        $this->assertStringContainsString('contribuyenteid', $payload);
+        $fila = FacturaPendiente::query()->where('nrofactura', $nro)->first();
+        $this->assertNotSame('VALOR_VIEJO', $fila->payload);
+        $this->assertStringContainsString('contribuyenteid', $fila->payload);
+        $this->assertFalse($fila->enviado);
+        $this->assertNull($fila->respuesta);
         $this->assertSame(1, FacturaPendiente::query()->where('nrofactura', $nro)->count());
     }
 
