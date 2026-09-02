@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DetalleFactura extends Model
 {
+    protected $connection = 'puntopan';
+
     protected $table = 'comandadet';
 
     protected $primaryKey = 'IdItem';

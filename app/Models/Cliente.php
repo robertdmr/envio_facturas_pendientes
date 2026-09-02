@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Cliente extends Model
 {
+    protected $connection = 'puntopan';
+
     protected $table = 'clientes';
 
     protected $primaryKey = 'IdCliente';

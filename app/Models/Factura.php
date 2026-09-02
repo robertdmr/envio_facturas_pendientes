@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Factura extends Model
 {
+    protected $connection = 'puntopan';
+
     protected $table = 'facturas';
 
     protected $primaryKey = 'NroFactura';

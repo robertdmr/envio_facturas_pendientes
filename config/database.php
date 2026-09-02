@@ -64,6 +64,26 @@ return [
             ]) : [],
         ],
 
+        'puntopan' => [
+            'driver' => 'mysql',
+            'url' => env('PUNTOPAN_DB_URL'),
+            'host' => env('PUNTOPAN_DB_HOST', '127.0.0.1'),
+            'port' => env('PUNTOPAN_DB_PORT', '3306'),
+            'database' => env('PUNTOPAN_DB_DATABASE', 'puntopan'),
+            'username' => env('PUNTOPAN_DB_USERNAME', 'root'),
+            'password' => env('PUNTOPAN_DB_PASSWORD', ''),
+            'unix_socket' => env('PUNTOPAN_DB_SOCKET', ''),
+            'charset' => env('DB_CHARSET', 'utf8mb4'),
+            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
+                Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+            ]) : [],
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

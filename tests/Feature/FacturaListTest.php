@@ -18,7 +18,7 @@ class FacturaListTest extends TestCase
 
     public function test_index_shows_columns_from_comandadet_and_clientes(): void
     {
-        $fila = \DB::table('facturas')
+        $fila = \DB::connection('puntopan')->table('facturas')
             ->join('clientes', 'clientes.IdCliente', '=', 'facturas.IdCliente')
             ->join('comandadet', 'comandadet.NroFactura', '=', 'facturas.NroFactura')
             ->whereNotNull('clientes.NombreEmpresa')
