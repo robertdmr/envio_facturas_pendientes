@@ -47,12 +47,6 @@
         </div>
 
         <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-            <p class="text-sm text-gray-500">
-                Mostrando
-                <span class="font-medium text-gray-700">{{ $facturas->firstItem() ?? 0 }}</span>–
-                <span class="font-medium text-gray-700">{{ $facturas->lastItem() ?? 0 }}</span>
-                de <span class="font-medium text-gray-700">{{ number_format($facturas->total()) }}</span> facturas
-            </p>
             <div class="flex items-center gap-2">
                 <a href="{{ route('facturas.index') }}"
                    class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
@@ -125,8 +119,7 @@
         </div>
     </div>
 
-    <div class="mt-4 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
-        <p class="text-sm text-gray-500">Página {{ $facturas->currentPage() }} de {{ $facturas->lastPage() }}</p>
+    <div class="mt-4">
         {{ $facturas->links() }}
     </div>
 @endsection
