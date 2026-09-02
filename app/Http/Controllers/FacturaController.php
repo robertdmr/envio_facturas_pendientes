@@ -44,7 +44,7 @@ class FacturaController extends Controller
             )
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         return view('facturas.index', [
