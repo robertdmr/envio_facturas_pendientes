@@ -101,7 +101,7 @@
                                         Reenviar
                                     </button>
                                     <button type="button" title="Generar JSON (próximamente)" data-factura="{{ $factura->NroFactura }}"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50">
+                                            class="js-generar-json inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50">
                                         Generar JSON
                                     </button>
                                 </div>
@@ -122,4 +122,56 @@
     <div class="mt-4">
         {{ $facturas->links() }}
     </div>
+
+    <div id="json-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+        <div class="absolute inset-0 bg-gray-900/60" data-close-json></div>
+        <div class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+                <h2 class="text-base font-semibold text-gray-900">JSON generado</h2>
+                <button type="button" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" data-close-json aria-label="Cerrar">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <p id="json-status" class="border-b border-gray-100 px-5 py-2 text-sm text-gray-600"></p>
+            <pre id="json-content" class="flex-1 overflow-auto bg-gray-900 px-5 py-4 text-xs leading-relaxed text-emerald-300"></pre>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+            const modal = document.getElementById('json-modal');
+            const content = document.getElementById('json-content');
+            const status = document.getElementById('json-status');
+
+            const close = () => modal.classList.add('hidden');
+            modal.querySelectorAll('[data-close-json]').forEach((el) => el.addEventListener('click', close));
+
+            document.querySelectorAll('.js-generar-json').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const nro = btn.dataset.factura;
+                    content.textContent = 'Generando…';
+                    status.textContent = '';
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+
+                    try {
+                        const res = await fetch('/facturas/' + encodeURIComponent(nro) + '/json', {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.message || 'Error al generar el JSON');
+                        }
+                        content.textContent = JSON.stringify(data.payload, null, 2);
+                        status.textContent = 'Guardado como pendiente de envío · ' + data.nrofactura;
+                    } catch (err) {
+                        content.textContent = '';
+                        status.textContent = err.message || 'Error inesperado';
+                    }
+                });
+            });
+        })();
+    </script>
 @endsection

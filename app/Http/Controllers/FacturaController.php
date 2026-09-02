@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\DetalleFactura;
 use App\Models\Factura;
+use App\Models\FacturaPendiente;
+use App\Services\EFacturaBuilder;
 use Illuminate\Http\Request;
 
 class FacturaController extends Controller
@@ -75,6 +77,24 @@ class FacturaController extends Controller
         return view('facturas.show', [
             'factura' => $factura,
             'detalles' => $detalles,
+        ]);
+    }
+
+    public function generarJson(string $factura)
+    {
+        $factura = Factura::query()->where('NroFactura', $factura)->first();
+        abort_unless($factura, 404);
+
+        $payload = EFacturaBuilder::build($factura);
+
+        FacturaPendiente::query()->updateOrCreate(
+            ['nrofactura' => $factura->NroFactura],
+            ['payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)]
+        );
+
+        return response()->json([
+            'nrofactura' => $factura->NroFactura,
+            'payload' => $payload,
         ]);
     }
 
