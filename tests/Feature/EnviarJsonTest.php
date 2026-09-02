@@ -93,8 +93,12 @@ class EnviarJsonTest extends TestCase
 
     public function test_error_si_no_hay_pendiente(): void
     {
+        $conPendiente = FacturaPendiente::query()->pluck('nrofactura');
+
         $nro = Factura::query()->where('TipoFactura', 'Contado')
-            ->orderByDesc('FechaFactura')->orderByDesc('NroFactura')
+            ->when($conPendiente->isNotEmpty(), fn ($q) => $q->whereNotIn('NroFactura', $conPendiente))
+            ->orderByDesc('FechaFactura')
+            ->orderByDesc('NroFactura')
             ->value('NroFactura');
         $this->assertNotNull($nro);
 
