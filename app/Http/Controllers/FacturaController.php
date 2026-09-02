@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DetalleFactura;
 use App\Models\Factura;
 use App\Models\FacturaPendiente;
+use App\Models\ParametroEfactura;
 use App\Services\EFacturaBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -51,7 +52,7 @@ class FacturaController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $pendientes = \App\Models\FacturaPendiente::query()
+        $pendientes = FacturaPendiente::query()
             ->whereIn('nrofactura', $facturas->pluck('NroFactura'))
             ->get()
             ->keyBy('nrofactura');
@@ -112,10 +113,10 @@ class FacturaController extends Controller
 
     public function enviar(string $factura)
     {
-        $pendiente = \App\Models\FacturaPendiente::query()->where('nrofactura', $factura)->first();
+        $pendiente = FacturaPendiente::query()->where('nrofactura', $factura)->first();
         abort_unless($pendiente, 422, 'Primero generá el JSON de la factura.');
 
-        $parametros = \App\Models\ParametroEfactura::registroUnico();
+        $parametros = ParametroEfactura::registroUnico();
         abort_unless($parametros->api_url, 422, 'Configurá la API URL para el envío.');
 
         $payload = json_decode($pendiente->payload, true) ?: [];
