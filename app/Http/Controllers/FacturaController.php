@@ -53,6 +53,31 @@ class FacturaController extends Controller
         ]);
     }
 
+    public function show(string $factura)
+    {
+        $factura = Factura::query()
+            ->leftJoin('clientes', 'clientes.IdCliente', '=', 'facturas.IdCliente')
+            ->select(
+                'facturas.*',
+                'clientes.NombreEmpresa as nombre_cliente',
+                'clientes.RUC as ruc_cliente'
+            )
+            ->where('facturas.NroFactura', $factura)
+            ->first();
+
+        abort_unless($factura, 404);
+
+        $detalles = DetalleFactura::query()
+            ->where('NroFactura', $factura->NroFactura)
+            ->orderBy('IdItem')
+            ->get();
+
+        return view('facturas.show', [
+            'factura' => $factura,
+            'detalles' => $detalles,
+        ]);
+    }
+
     private function filtroFechaValido(Request $request, string $campo): bool
     {
         return $request->filled($campo) && strtotime((string) $request->string($campo)) !== false;
