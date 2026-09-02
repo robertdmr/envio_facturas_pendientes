@@ -30,10 +30,10 @@ class FacturaController extends Controller
             ->when($request->filled('tipo'), function ($query) use ($request) {
                 $query->where('facturas.TipoFactura', $request->string('tipo'));
             })
-            ->when($request->filled('desde'), function ($query) use ($request) {
+            ->when($this->filtroFechaValido($request, 'desde'), function ($query) use ($request) {
                 $query->whereDate('facturas.FechaFactura', '>=', $request->string('desde'));
             })
-            ->when($request->filled('hasta'), function ($query) use ($request) {
+            ->when($this->filtroFechaValido($request, 'hasta'), function ($query) use ($request) {
                 $query->whereDate('facturas.FechaFactura', '<=', $request->string('hasta'));
             })
             ->select(
@@ -51,5 +51,10 @@ class FacturaController extends Controller
             'facturas' => $facturas,
             'tipos' => ['Contado', 'Credito'],
         ]);
+    }
+
+    private function filtroFechaValido(Request $request, string $campo): bool
+    {
+        return $request->filled($campo) && strtotime((string) $request->string($campo)) !== false;
     }
 }
