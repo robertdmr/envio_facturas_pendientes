@@ -7,6 +7,7 @@ use App\Models\Factura;
 use App\Models\FacturaPendiente;
 use App\Services\EFacturaBuilder;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 class FacturaController extends Controller
 {
@@ -85,7 +86,11 @@ class FacturaController extends Controller
         $factura = Factura::query()->where('NroFactura', $factura)->first();
         abort_unless($factura, 404);
 
-        $payload = EFacturaBuilder::build($factura);
+        try {
+            $payload = EFacturaBuilder::build($factura);
+        } catch (RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
 
         FacturaPendiente::query()->updateOrCreate(
             ['nrofactura' => $factura->NroFactura],

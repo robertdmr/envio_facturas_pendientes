@@ -100,7 +100,7 @@
                                             class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100">
                                         Reenviar
                                     </button>
-                                    <button type="button" title="Generar JSON (próximamente)" data-factura="{{ $factura->NroFactura }}"
+                                    <button type="button" title="Generar JSON" data-factura="{{ $factura->NroFactura }}"
                                             class="js-generar-json inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50">
                                         Generar JSON
                                     </button>
@@ -160,9 +160,14 @@
                             method: 'POST',
                             headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
                         });
-                        const data = await res.json();
-                        if (!res.ok) {
-                            throw new Error(data.message || 'Error al generar el JSON');
+                        let data = null;
+                        try {
+                            data = await res.json();
+                        } catch (e) {
+                            data = null;
+                        }
+                        if (!res.ok || !data) {
+                            throw new Error((data && data.message) || 'Error al generar el JSON (' + res.status + ')');
                         }
                         content.textContent = JSON.stringify(data.payload, null, 2);
                         status.textContent = 'Guardado como pendiente de envío · ' + data.nrofactura;

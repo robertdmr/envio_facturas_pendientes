@@ -32,6 +32,7 @@ class GenerarJsonTest extends TestCase
     private function nroContado(): string
     {
         $nro = Factura::query()->where('TipoFactura', 'Contado')
+            ->whereHas('detalles', fn ($q) => $q->where('Cantidad', '>', 0))
             ->orderByDesc('FechaFactura')
             ->orderByDesc('NroFactura')
             ->value('NroFactura');
@@ -51,8 +52,7 @@ class GenerarJsonTest extends TestCase
             ->assertJsonPath('payload.contribuyente.contribuyenteid', 33)
             ->assertJsonPath('payload.timbrado.documentoNro', substr($nro, 8));
 
-        $this->assertDatabaseCount('facturas_pendientes', 1);
-        $this->assertDatabaseHas('facturas_pendientes', ['nrofactura' => $nro]);
+        $this->assertSame(1, FacturaPendiente::query()->where('nrofactura', $nro)->count());
     }
 
     public function test_regenerate_replaces_payload_without_duplicate(): void
@@ -60,13 +60,14 @@ class GenerarJsonTest extends TestCase
         $nro = $this->nroContado();
 
         $this->postJson('/facturas/'.$nro.'/json')->assertOk();
-        $primera = FacturaPendiente::query()->where('nrofactura', $nro)->value('payload');
+        FacturaPendiente::query()->where('nrofactura', $nro)->update(['payload' => 'VALOR_VIEJO']);
 
         $this->postJson('/facturas/'.$nro.'/json')->assertOk();
-        $segunda = FacturaPendiente::query()->where('nrofactura', $nro)->value('payload');
 
-        $this->assertDatabaseCount('facturas_pendientes', 1);
-        $this->assertSame($primera, $segunda);
+        $payload = FacturaPendiente::query()->where('nrofactura', $nro)->value('payload');
+        $this->assertNotSame('VALOR_VIEJO', $payload);
+        $this->assertStringContainsString('contribuyenteid', $payload);
+        $this->assertSame(1, FacturaPendiente::query()->where('nrofactura', $nro)->count());
     }
 
     public function test_generate_returns_404_for_unknown_invoice(): void
