@@ -55,6 +55,11 @@
                 <input type="text" id="sucursal" name="sucursal" value="{{ old('sucursal', $parametros->sucursal) }}"
                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
+            <div class="sm:col-span-2">
+                <label for="api_url" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">API URL (envío de aceptación)</label>
+                <input type="url" id="api_url" name="api_url" value="{{ old('api_url', $parametros->api_url) }}" placeholder="https://..."
+                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
         </div>
 
         <div class="mt-6 flex items-center justify-end gap-2 border-t border-gray-100 pt-4">

@@ -24,6 +24,7 @@ class ConfiguracionController extends Controller
             'timbrado' => ['required', 'string', 'max:50'],
             'fec_inicio' => ['required', 'date'],
             'sucursal' => ['required', 'string', 'max:100'],
+            'api_url' => ['nullable', 'url', 'max:255'],
         ]);
 
         ParametroEfactura::registroUnico()->update($validated);

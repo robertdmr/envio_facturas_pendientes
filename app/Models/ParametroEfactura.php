@@ -8,7 +8,7 @@ class ParametroEfactura extends Model
 {
     protected $table = 'parametros_efactura';
 
-    protected $fillable = ['contribuyente_id', 'pass', 'timbrado', 'fec_inicio', 'sucursal'];
+    protected $fillable = ['contribuyente_id', 'pass', 'timbrado', 'fec_inicio', 'sucursal', 'api_url'];
 
     protected function casts(): array
     {
@@ -25,6 +25,7 @@ class ParametroEfactura extends Model
             'timbrado' => '12558948',
             'fec_inicio' => '2021-08-25 00:00:00',
             'sucursal' => 'Central',
+            'api_url' => '',
         ]);
     }
 }

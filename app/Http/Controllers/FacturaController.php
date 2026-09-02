@@ -7,6 +7,7 @@ use App\Models\Factura;
 use App\Models\FacturaPendiente;
 use App\Services\EFacturaBuilder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class FacturaController extends Controller
@@ -50,9 +51,15 @@ class FacturaController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        $pendientes = \App\Models\FacturaPendiente::query()
+            ->whereIn('nrofactura', $facturas->pluck('NroFactura'))
+            ->get()
+            ->keyBy('nrofactura');
+
         return view('facturas.index', [
             'facturas' => $facturas,
             'tipos' => ['Contado', 'Credito'],
+            'pendientes' => $pendientes,
         ]);
     }
 
@@ -100,6 +107,40 @@ class FacturaController extends Controller
         return response()->json([
             'nrofactura' => $factura->NroFactura,
             'payload' => $payload,
+        ]);
+    }
+
+    public function enviar(string $factura)
+    {
+        $pendiente = \App\Models\FacturaPendiente::query()->where('nrofactura', $factura)->first();
+        abort_unless($pendiente, 422, 'Primero generá el JSON de la factura.');
+
+        $parametros = \App\Models\ParametroEfactura::registroUnico();
+        abort_unless($parametros->api_url, 422, 'Configurá la API URL para el envío.');
+
+        $payload = json_decode($pendiente->payload, true) ?: [];
+
+        try {
+            $respuesta = Http::timeout(30)
+                ->acceptJson()
+                ->asJson()
+                ->post($parametros->api_url, $payload);
+            $cuerpo = (string) $respuesta->body();
+            $enviado = $respuesta->successful();
+        } catch (\Throwable $e) {
+            $cuerpo = $e->getMessage();
+            $enviado = false;
+        }
+
+        $pendiente->update([
+            'enviado' => $enviado,
+            'respuesta' => $cuerpo,
+        ]);
+
+        return response()->json([
+            'nrofactura' => $factura,
+            'enviado' => $enviado,
+            'respuesta' => $cuerpo,
         ]);
     }
 

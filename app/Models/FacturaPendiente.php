@@ -8,5 +8,12 @@ class FacturaPendiente extends Model
 {
     protected $table = 'facturas_pendientes';
 
-    protected $fillable = ['nrofactura', 'payload'];
+    protected $fillable = ['nrofactura', 'payload', 'enviado', 'respuesta'];
+
+    protected function casts(): array
+    {
+        return [
+            'enviado' => 'boolean',
+        ];
+    }
 }

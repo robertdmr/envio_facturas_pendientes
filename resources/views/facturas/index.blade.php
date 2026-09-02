@@ -72,6 +72,7 @@
                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Situación</th>
                         <th class="px-4 py-3 text-right font-semibold text-gray-600">Ítems</th>
                         <th class="px-4 py-3 text-right font-semibold text-gray-600">Total</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Estado</th>
                         <th class="px-4 py-3 text-right font-semibold text-gray-600">Acciones</th>
                     </tr>
                 </thead>
@@ -95,6 +96,15 @@
                             <td class="px-4 py-3 text-right tabular-nums text-gray-700">{{ number_format((float) $factura->items) }}</td>
                             <td class="px-4 py-3 text-right font-medium tabular-nums text-gray-900">{{ $money($factura->total) }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">
+                                @if ($pendientes[$factura->NroFactura] ?? null)
+                                    @if ($pendientes[$factura->NroFactura]->enviado)
+                                        <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">Enviado</span>
+                                    @else
+                                        <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">Pendiente</span>
+                                    @endif
+                                @endif
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
                                 <div class="flex items-center justify-end gap-2">
                                     <button type="button" title="Reenviar factura (próximamente)" data-factura="{{ $factura->NroFactura }}"
                                             class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100">
@@ -109,7 +119,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-4 py-10 text-center text-gray-500">
+                            <td colspan="9" class="px-4 py-10 text-center text-gray-500">
                                 No hay facturas que coincidan con los filtros.
                             </td>
                         </tr>
@@ -126,14 +136,20 @@
     <div id="json-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
         <div class="absolute inset-0 bg-gray-900/60" data-close-json></div>
         <div class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
-            <div class="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+            <div class="flex items-center gap-3 border-b border-gray-200 px-5 py-3">
                 <h2 class="text-base font-semibold text-gray-900">JSON generado</h2>
+                <div class="flex-1"></div>
+                <button id="json-enviar" type="button"
+                        class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    Enviar
+                </button>
                 <button type="button" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" data-close-json aria-label="Cerrar">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
             </div>
             <p id="json-status" class="border-b border-gray-100 px-5 py-2 text-sm text-gray-600"></p>
             <pre id="json-content" class="flex-1 overflow-auto bg-gray-900 px-5 py-4 text-xs leading-relaxed text-emerald-300"></pre>
+            <pre id="json-respuesta" class="hidden max-h-48 overflow-auto border-t border-gray-200 bg-gray-100 px-5 py-3 text-xs leading-relaxed text-gray-800"></pre>
         </div>
     </div>
 
@@ -143,20 +159,34 @@
             const modal = document.getElementById('json-modal');
             const content = document.getElementById('json-content');
             const status = document.getElementById('json-status');
+            const respuesta = document.getElementById('json-respuesta');
+            const enviarBtn = document.getElementById('json-enviar');
+            let nroActual = null;
 
-            const close = () => modal.classList.add('hidden');
+            const close = () => {
+                modal.classList.add('hidden');
+                nroActual = null;
+                enviarBtn.disabled = true;
+            };
             modal.querySelectorAll('[data-close-json]').forEach((el) => el.addEventListener('click', close));
+
+            const mostrarError = (msg) => {
+                content.textContent = '';
+                status.textContent = msg || 'Error inesperado';
+            };
 
             document.querySelectorAll('.js-generar-json').forEach((btn) => {
                 btn.addEventListener('click', async () => {
-                    const nro = btn.dataset.factura;
+                    nroActual = btn.dataset.factura;
                     content.textContent = 'Generando…';
                     status.textContent = '';
+                    respuesta.classList.add('hidden');
+                    enviarBtn.disabled = true;
                     modal.classList.remove('hidden');
                     modal.classList.add('flex');
 
                     try {
-                        const res = await fetch('/facturas/' + encodeURIComponent(nro) + '/json', {
+                        const res = await fetch('/facturas/' + encodeURIComponent(nroActual) + '/json', {
                             method: 'POST',
                             headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
                         });
@@ -171,11 +201,39 @@
                         }
                         content.textContent = JSON.stringify(data.payload, null, 2);
                         status.textContent = 'Guardado como pendiente de envío · ' + data.nrofactura;
+                        enviarBtn.disabled = false;
                     } catch (err) {
-                        content.textContent = '';
-                        status.textContent = err.message || 'Error inesperado';
+                        mostrarError(err.message);
                     }
                 });
+            });
+
+            enviarBtn.addEventListener('click', async () => {
+                if (!nroActual) return;
+                enviarBtn.disabled = true;
+                status.textContent = 'Enviando…';
+                try {
+                    const res = await fetch('/facturas/' + encodeURIComponent(nroActual) + '/enviar', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                    });
+                    let data = null;
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        data = null;
+                    }
+                    if (!res.ok || !data) {
+                        throw new Error((data && data.message) || 'Error al enviar (' + res.status + ')');
+                    }
+                    status.textContent = data.enviado
+                        ? 'Enviado correctamente · ' + data.nrofactura
+                        : 'Respuesta del endpoint (no aceptado) · ' + data.nrofactura;
+                    respuesta.textContent = data.respuesta || '(sin respuesta)';
+                    respuesta.classList.remove('hidden');
+                } catch (err) {
+                    status.textContent = err.message || 'Error inesperado';
+                }
             });
         })();
     </script>
