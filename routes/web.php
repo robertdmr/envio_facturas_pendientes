@@ -12,6 +12,8 @@ Route::post('/facturas/{factura}/json', [FacturaController::class, 'generarJson'
 
 Route::post('/facturas/{factura}/enviar', [FacturaController::class, 'enviar'])->name('facturas.enviar');
 
+Route::get('/facturas/{factura}/respuesta', [FacturaController::class, 'respuesta'])->name('facturas.respuesta');
+
 Route::get('/configuracion', [ConfiguracionController::class, 'edit'])->name('configuracion.edit');
 
 Route::post('/configuracion', [ConfiguracionController::class, 'update'])->name('configuracion.update');

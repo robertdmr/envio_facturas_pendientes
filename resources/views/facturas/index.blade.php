@@ -106,6 +106,12 @@
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <div class="flex items-center justify-end gap-2">
+                                    @if (!empty(($pendientes[$factura->NroFactura]->respuesta ?? null)))
+                                        <button type="button" title="Ver respuesta del endpoint" data-factura="{{ $factura->NroFactura }}"
+                                                class="js-ver-respuesta inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-100">
+                                            Ver respuesta
+                                        </button>
+                                    @endif
                                     <button type="button" title="Reenviar factura (próximamente)" data-factura="{{ $factura->NroFactura }}"
                                             class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100">
                                         Reenviar
@@ -243,6 +249,74 @@
                     status.textContent = err.message || 'Error inesperado';
                     enviarBtn.disabled = false;
                 }
+            });
+    <div id="respuesta-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+        <div class="absolute inset-0 bg-gray-900/60" data-close-respuesta></div>
+        <div class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div class="flex items-center gap-3 border-b border-gray-200 px-5 py-3">
+                <h2 class="text-base font-semibold text-gray-900">Respuesta del endpoint</h2>
+                <span id="respuesta-nro" class="font-mono text-sm text-gray-500"></span>
+                <div class="flex-1"></div>
+                <button type="button" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600" data-close-respuesta aria-label="Cerrar">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            <p id="respuesta-estado" class="border-b border-gray-100 px-5 py-2 text-sm text-gray-600"></p>
+            <pre id="respuesta-content" class="flex-1 overflow-auto bg-gray-900 px-5 py-4 text-xs leading-relaxed text-gray-100"></pre>
+        </div>
+    </div>
+
+    <script>
+        (() => {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+            const modal = document.getElementById('respuesta-modal');
+            const content = document.getElementById('respuesta-content');
+            const estado = document.getElementById('respuesta-estado');
+            const nroLabel = document.getElementById('respuesta-nro');
+
+            const close = () => modal.classList.add('hidden');
+            modal.querySelectorAll('[data-close-respuesta]').forEach((el) => el.addEventListener('click', close));
+
+            document.querySelectorAll('.js-ver-respuesta').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const nro = btn.dataset.factura;
+                    nroLabel.textContent = '· ' + nro;
+                    estado.textContent = 'Cargando…';
+                    content.textContent = '';
+                    modal.classList.remove('hidden');
+                    modal.classList.add('flex');
+
+                    try {
+                        const res = await fetch('/facturas/' + encodeURIComponent(nro) + '/respuesta', {
+                            headers: { 'Accept': 'application/json' },
+                        });
+                        let data = null;
+                        try {
+                            data = await res.json();
+                        } catch (e) {
+                            data = null;
+                        }
+                        if (!res.ok || !data) {
+                            throw new Error((data && data.message) || 'Error al obtener la respuesta (' + res.status + ')');
+                        }
+                        estado.textContent = data.enviado
+                            ? 'Estado: Enviado'
+                            : 'Estado: Pendiente';
+                        estado.className = 'border-b px-5 py-2 text-sm ' + (data.enviado
+                            ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
+                            : 'border-amber-100 bg-amber-50 text-amber-800');
+                        const texto = data.respuesta || '(sin respuesta)';
+                        try {
+                            content.textContent = JSON.stringify(JSON.parse(texto), null, 2);
+                        } catch (e) {
+                            content.textContent = texto;
+                        }
+                    } catch (err) {
+                        estado.className = 'border-b border-red-100 bg-red-50 px-5 py-2 text-sm text-red-800';
+                        estado.textContent = err.message || 'Error inesperado';
+                        content.textContent = '';
+                    }
+                });
             });
         })();
     </script>

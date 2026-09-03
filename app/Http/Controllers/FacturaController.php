@@ -151,6 +151,18 @@ class FacturaController extends Controller
         ]);
     }
 
+    public function respuesta(string $factura)
+    {
+        $pendiente = FacturaPendiente::query()->where('nrofactura', $factura)->first();
+        abort_unless($pendiente, 404);
+
+        return response()->json([
+            'nrofactura' => $pendiente->nrofactura,
+            'enviado' => (bool) $pendiente->enviado,
+            'respuesta' => $pendiente->respuesta,
+        ]);
+    }
+
     private function filtroFechaValido(Request $request, string $campo): bool
     {
         return $request->filled($campo) && strtotime((string) $request->string($campo)) !== false;
