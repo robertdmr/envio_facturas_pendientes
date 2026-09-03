@@ -106,7 +106,7 @@
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <div class="flex items-center justify-end gap-2">
-                                    @if (!empty(($pendientes[$factura->NroFactura]->respuesta ?? null)))
+                                    @if (($pendientes[$factura->NroFactura] ?? null))
                                         <button type="button" title="Ver respuesta del endpoint" data-factura="{{ $factura->NroFactura }}"
                                                 class="js-ver-respuesta inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-100">
                                             Ver respuesta
