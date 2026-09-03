@@ -250,6 +250,9 @@
                     enviarBtn.disabled = false;
                 }
             });
+        })();
+    </script>
+
     <div id="respuesta-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
         <div class="absolute inset-0 bg-gray-900/60" data-close-respuesta></div>
         <div class="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
