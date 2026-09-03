@@ -112,10 +112,6 @@
                                             Ver respuesta
                                         </button>
                                     @endif
-                                    <button type="button" title="Reenviar factura (próximamente)" data-factura="{{ $factura->NroFactura }}"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100">
-                                        Reenviar
-                                    </button>
                                     <button type="button" title="Generar JSON" data-factura="{{ $factura->NroFactura }}"
                                             class="js-generar-json inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50">
                                         Generar JSON
