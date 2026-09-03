@@ -32,6 +32,9 @@ class FacturaController extends Controller
             ->when($request->filled('q'), function ($query) use ($request) {
                 $query->where('facturas.NroFactura', 'like', '%'.$request->string('q').'%');
             })
+            ->when($request->filled('cliente'), function ($query) use ($request) {
+                $query->where('clientes.NombreEmpresa', 'like', '%'.$request->string('cliente').'%');
+            })
             ->when($request->filled('tipo'), function ($query) use ($request) {
                 $query->where('facturas.TipoFactura', $request->string('tipo'));
             })

@@ -87,4 +87,34 @@ class FacturaListTest extends TestCase
             ->assertSee($credito)
             ->assertDontSee($contado);
     }
+
+    public function test_index_filters_by_client_name(): void
+    {
+        $fila = DB::connection('puntopan')->table('facturas')
+            ->join('clientes', 'clientes.IdCliente', '=', 'facturas.IdCliente')
+            ->whereNotNull('clientes.NombreEmpresa')
+            ->where('clientes.NombreEmpresa', '!=', 'SELECCIONAR CLIENTE')
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->first(['facturas.NroFactura', 'clientes.NombreEmpresa']);
+
+        $this->assertNotNull($fila);
+
+        $otro = DB::connection('puntopan')->table('facturas')
+            ->join('clientes', 'clientes.IdCliente', '=', 'facturas.IdCliente')
+            ->whereNotNull('clientes.NombreEmpresa')
+            ->where('clientes.NombreEmpresa', '!=', 'SELECCIONAR CLIENTE')
+            ->whereRaw('clientes.NombreEmpresa NOT LIKE ?', ['%'.$fila->NombreEmpresa.'%'])
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->first(['facturas.NroFactura', 'clientes.NombreEmpresa']);
+
+        $this->assertNotNull($otro);
+
+        $this->get('/?cliente='.urlencode($fila->NombreEmpresa))
+            ->assertOk()
+            ->assertSee($fila->NombreEmpresa)
+            ->assertSee($fila->NroFactura)
+            ->assertDontSee($otro->NroFactura);
+    }
 }

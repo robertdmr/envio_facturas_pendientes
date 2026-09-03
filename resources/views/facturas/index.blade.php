@@ -5,6 +5,7 @@
 @php
     $money = fn ($value) => number_format((float) $value, 0, ',', '.');
     $q = request()->query('q', '');
+    $cliente = request()->query('cliente', '');
     $desde = request()->query('desde', '');
     $hasta = request()->query('hasta', '');
     $tipo = request()->query('tipo', '');
@@ -18,10 +19,15 @@
 
     <form method="GET" action="{{ route('facturas.index') }}"
           class="mb-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div class="xl:col-span-2">
                 <label for="q" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">N° factura</label>
                 <input type="text" id="q" name="q" value="{{ $q }}" placeholder="001-001-0000000"
+                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label for="cliente" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</label>
+                <input type="text" id="cliente" name="cliente" value="{{ $cliente }}" placeholder="Nombre del cliente"
                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
