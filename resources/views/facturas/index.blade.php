@@ -71,6 +71,10 @@
             <span id="grupo-contador">0</span> factura(s) seleccionada(s) para enviar
         </p>
         <div class="flex items-center gap-2">
+            <button id="limpiar-seleccion" type="button"
+                    class="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-100">
+                Limpiar selección
+            </button>
             <button id="btn-enviar-grupo" type="button" disabled
                     class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
                 Enviar seleccionadas
@@ -348,30 +352,74 @@
 
     <script>
         (() => {
+            const STORAGE_KEY = 'facturas-seleccionadas';
             const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
-            const filas = document.querySelectorAll('.js-fila');
+            const filas = Array.from(document.querySelectorAll('.js-fila'));
             const master = document.getElementById('check-todas');
             const contador = document.getElementById('grupo-contador');
             const boton = document.getElementById('btn-enviar-grupo');
+            const limpiar = document.getElementById('limpiar-seleccion');
             const estado = document.getElementById('grupo-status');
 
+            const cargar = () => {
+                try {
+                    const guardadas = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '[]');
+                    return Array.isArray(guardadas) ? new Set(guardadas.filter((n) => typeof n === 'string')) : new Set();
+                } catch (e) {
+                    return new Set();
+                }
+            };
+            const guardar = (set) => sessionStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set)));
+
+            let seleccion = cargar();
+
+            const sincronizarFilas = () => {
+                filas.forEach((c) => { c.checked = seleccion.has(c.dataset.nro); });
+            };
+
             const actualizar = () => {
-                const n = Array.from(filas).filter((c) => c.checked).length;
+                sincronizarFilas();
+                const n = seleccion.size;
                 contador.textContent = String(n);
                 boton.disabled = n === 0;
                 if (master) {
-                    master.checked = n > 0 && n === filas.length;
+                    master.checked = filas.length > 0 && filas.every((c) => seleccion.has(c.dataset.nro));
                 }
             };
 
-            filas.forEach((c) => c.addEventListener('change', actualizar));
+            filas.forEach((c) => {
+                c.addEventListener('change', () => {
+                    if (c.checked) {
+                        seleccion.add(c.dataset.nro);
+                    } else {
+                        seleccion.delete(c.dataset.nro);
+                    }
+                    guardar(seleccion);
+                    actualizar();
+                });
+            });
+
             master?.addEventListener('change', () => {
-                filas.forEach((c) => { c.checked = master.checked; });
+                filas.forEach((c) => {
+                    if (master.checked) {
+                        seleccion.add(c.dataset.nro);
+                    } else {
+                        seleccion.delete(c.dataset.nro);
+                    }
+                });
+                guardar(seleccion);
+                actualizar();
+            });
+
+            limpiar?.addEventListener('click', () => {
+                seleccion = new Set();
+                guardar(seleccion);
+                estado.classList.add('hidden');
                 actualizar();
             });
 
             boton.addEventListener('click', async () => {
-                const nros = Array.from(filas).filter((c) => c.checked).map((c) => c.dataset.nro);
+                const nros = Array.from(seleccion);
                 if (nros.length === 0) return;
 
                 boton.disabled = true;
@@ -396,12 +444,17 @@
                     estado.textContent = 'Se encolaron ' + data.encoladas
                         + ' factura(s) · ' + data.omitidas + ' omitida(s) (ya enviadas o inexistentes). '
                         + 'Ejecutá: php artisan queue:work --stop-when-empty';
+                    seleccion = new Set();
+                    guardar(seleccion);
+                    actualizar();
                 } catch (err) {
                     estado.textContent = err.message || 'Error inesperado';
                 } finally {
-                    boton.disabled = true;
+                    boton.disabled = seleccion.size === 0;
                 }
             });
+
+            actualizar();
         })();
     </script>
 @endsection
