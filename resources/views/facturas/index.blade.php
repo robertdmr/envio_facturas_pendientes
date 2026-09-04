@@ -418,6 +418,64 @@
                 actualizar();
             });
 
+            const PROGRESO_KEY = 'facturas-envio-proceso';
+            let enProceso = [];
+            let intentos = 0;
+            const MAX_INTENTOS = 45;
+
+            const leerProgreso = () => {
+                try {
+                    const v = JSON.parse(sessionStorage.getItem(PROGRESO_KEY) || '[]');
+                    enProceso = Array.isArray(v) ? v.filter((n) => typeof n === 'string') : [];
+                } catch (e) {
+                    enProceso = [];
+                }
+            };
+            const guardarProgreso = (nros) => sessionStorage.setItem(PROGRESO_KEY, JSON.stringify(nros));
+
+            const consultarEstado = async () => {
+                if (enProceso.length === 0) return;
+
+                try {
+                    const res = await fetch('/pendientes/estado', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nrofacturas: enProceso }),
+                    });
+                    let data = null;
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        data = null;
+                    }
+                    if (!res.ok || !data) {
+                        throw new Error((data && data.message) || 'Error al consultar estado (' + res.status + ')');
+                    }
+
+                    if (data.pendientes === 0) {
+                        sessionStorage.removeItem(PROGRESO_KEY);
+                        enProceso = [];
+                        window.location.reload();
+                        return;
+                    }
+
+                    estado.classList.remove('hidden');
+                    estado.textContent = 'Procesando ' + data.pendientes + ' factura(s) pendiente(s)… se actualizará el listado al terminar.';
+                    intentos += 1;
+                    if (intentos >= MAX_INTENTOS) {
+                        sessionStorage.removeItem(PROGRESO_KEY);
+                        enProceso = [];
+                        estado.textContent = 'El procesamiento sigue en curso. Recargá la página para ver las respuestas.';
+                        return;
+                    }
+                } catch (err) {
+                    estado.classList.remove('hidden');
+                    estado.textContent = err.message || 'Error inesperado';
+                    intentos += 1;
+                }
+                setTimeout(consultarEstado, 2500);
+            };
+
             boton.addEventListener('click', async () => {
                 const nros = Array.from(seleccion);
                 if (nros.length === 0) return;
@@ -441,12 +499,21 @@
                     if (!res.ok || !data) {
                         throw new Error((data && data.message) || 'Error al encolar (' + res.status + ')');
                     }
-                    estado.textContent = 'Se encolaron ' + data.encoladas
-                        + ' factura(s) · ' + data.omitidas + ' omitida(s) (ya enviadas o inexistentes). '
-                        + 'Ejecutá: php artisan queue:work --stop-when-empty';
+
                     seleccion = new Set();
                     guardar(seleccion);
                     actualizar();
+
+                    if (data.encoladas > 0) {
+                        intentos = 0;
+                        enProceso = data.nros || [];
+                        guardarProgreso(enProceso);
+                        estado.textContent = 'Se encolaron ' + data.encoladas
+                            + ' factura(s) · ' + data.omitidas + ' omitida(s). Ejecutá: php artisan queue:work --stop-when-empty';
+                        setTimeout(consultarEstado, 2500);
+                    } else {
+                        estado.textContent = 'No se encolaron facturas (' + data.omitidas + ' omitida(s): ya enviadas o inexistentes).';
+                    }
                 } catch (err) {
                     estado.textContent = err.message || 'Error inesperado';
                 } finally {
@@ -455,6 +522,12 @@
             });
 
             actualizar();
+            leerProgreso();
+            if (enProceso.length > 0) {
+                estado.classList.remove('hidden');
+                estado.textContent = 'Revisando facturas en proceso…';
+                consultarEstado();
+            }
         })();
     </script>
 @endsection

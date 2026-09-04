@@ -16,6 +16,8 @@ Route::get('/facturas/{factura}/respuesta', [FacturaController::class, 'respuest
 
 Route::post('/pendientes/enviar', [FacturaController::class, 'enviarPendientes'])->name('pendientes.enviar');
 
+Route::post('/pendientes/estado', [FacturaController::class, 'estadoPendientes'])->name('pendientes.estado');
+
 Route::get('/configuracion', [ConfiguracionController::class, 'edit'])->name('configuracion.edit');
 
 Route::post('/configuracion', [ConfiguracionController::class, 'update'])->name('configuracion.update');

@@ -69,9 +69,36 @@ class EnvioGrupoTest extends TestCase
         $this->postJson('/pendientes/enviar', [
             'nrofacturas' => [$yaEnviada, $sinPendiente, 'ZZ-999-9999999'],
         ])->assertOk()
-            ->assertJson(['encoladas' => 1, 'omitidas' => 2]);
+            ->assertJson(['encoladas' => 1, 'omitidas' => 2])
+            ->assertJsonPath('nros.0', $sinPendiente);
 
         Bus::assertChained([new EnviarPendienteJob($sinPendiente)]);
+    }
+
+    public function test_estado_cuenta_solo_pendientes_sin_resolver(): void
+    {
+        $conPendiente = FacturaPendiente::query()->pluck('nrofactura');
+
+        $candidatos = Factura::query()->where('TipoFactura', 'Contado')
+            ->whereHas('detalles', fn ($q) => $q->where('Cantidad', '>', 0))
+            ->when($conPendiente->isNotEmpty(), fn ($q) => $q->whereNotIn('NroFactura', $conPendiente))
+            ->orderByDesc('FechaFactura')
+            ->orderByDesc('NroFactura')
+            ->limit(3)
+            ->pluck('NroFactura')
+            ->all();
+
+        $this->assertCount(3, $candidatos);
+        [$sinResolver, $enviada, $fallida] = $candidatos;
+
+        FacturaPendiente::query()->create(['nrofactura' => $sinResolver, 'payload' => '{}', 'enviado' => false, 'respuesta' => null]);
+        FacturaPendiente::query()->create(['nrofactura' => $enviada, 'payload' => '{}', 'enviado' => true, 'respuesta' => '{}']);
+        FacturaPendiente::query()->create(['nrofactura' => $fallida, 'payload' => '{}', 'enviado' => false, 'respuesta' => '{"e":1}']);
+
+        $this->postJson('/pendientes/estado', [
+            'nrofacturas' => [$sinResolver, $enviada, $fallida],
+        ])->assertOk()
+            ->assertJson(['pendientes' => 1]);
     }
 
     public function test_lote_no_despacha_cuando_todo_ya_fue_enviado(): void

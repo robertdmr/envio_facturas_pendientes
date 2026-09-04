@@ -157,7 +157,26 @@ class FacturaController extends Controller
         return response()->json([
             'encoladas' => count($aEncolar),
             'omitidas' => $omitidas,
+            'nros' => $aEncolar,
         ]);
+    }
+
+    public function estadoPendientes(Request $request)
+    {
+        $validated = $request->validate([
+            'nrofacturas' => ['required', 'array'],
+            'nrofacturas.*' => ['required', 'string', 'max:255'],
+        ]);
+
+        $nros = array_values(array_unique($validated['nrofacturas']));
+
+        $pendientes = FacturaPendiente::query()
+            ->whereIn('nrofactura', $nros)
+            ->where('enviado', false)
+            ->whereNull('respuesta')
+            ->count();
+
+        return response()->json(['pendientes' => $pendientes]);
     }
 
     public function respuesta(string $factura)
