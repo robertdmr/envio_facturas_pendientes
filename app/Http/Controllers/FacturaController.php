@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\EnviarPendienteJob;
 use App\Models\DetalleFactura;
 use App\Models\Factura;
 use App\Models\FacturaPendiente;
-use App\Models\ParametroEfactura;
-use App\Services\EFacturaBuilder;
+use App\Services\EnvioEfacturaService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Bus;
 use RuntimeException;
 
 class FacturaController extends Controller
@@ -98,19 +98,10 @@ class FacturaController extends Controller
         abort_unless($factura, 404);
 
         try {
-            $payload = EFacturaBuilder::build($factura);
+            $payload = app(EnvioEfacturaService::class)->preparar($factura);
         } catch (RuntimeException $e) {
             abort(422, $e->getMessage());
         }
-
-        FacturaPendiente::query()->updateOrCreate(
-            ['nrofactura' => $factura->NroFactura],
-            [
-                'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
-                'enviado' => false,
-                'respuesta' => null,
-            ]
-        );
 
         return response()->json([
             'nrofactura' => $factura->NroFactura,
@@ -123,34 +114,49 @@ class FacturaController extends Controller
         $pendiente = FacturaPendiente::query()->where('nrofactura', $factura)->first();
         abort_unless($pendiente, 422, 'Primero generá el JSON de la factura.');
 
-        $parametros = ParametroEfactura::registroUnico();
-        abort_unless($parametros->api_url, 422, 'Configurá la API URL para el envío.');
-
-        $payload = json_decode($pendiente->payload, true) ?: [];
-
         try {
-            $respuesta = Http::timeout(30)
-                ->acceptJson()
-                ->asJson()
-                ->post($parametros->api_url, $payload);
-            $cuerpo = (string) $respuesta->body();
-            $enviado = $respuesta->successful();
-        } catch (\Throwable $e) {
-            $cuerpo = $e->getMessage();
-            $enviado = false;
+            $resultado = app(EnvioEfacturaService::class)->enviar($pendiente);
+        } catch (RuntimeException $e) {
+            abort(422, $e->getMessage());
         }
 
-        $cuerpo = mb_strcut($cuerpo, 0, 60000);
+        return response()->json($resultado);
+    }
 
-        $pendiente->update([
-            'enviado' => $enviado,
-            'respuesta' => $cuerpo,
+    public function enviarPendientes(Request $request)
+    {
+        $validated = $request->validate([
+            'nrofacturas' => ['required', 'array', 'min:1'],
+            'nrofacturas.*' => ['required', 'string', 'max:255'],
         ]);
 
+        $nros = array_values(array_unique($validated['nrofacturas']));
+
+        $enviadas = FacturaPendiente::query()
+            ->whereIn('nrofactura', $nros)
+            ->where('enviado', true)
+            ->pluck('nrofactura')
+            ->all();
+
+        $existentes = Factura::query()
+            ->whereIn('NroFactura', $nros)
+            ->pluck('NroFactura')
+            ->all();
+
+        $aEncolar = array_values(array_intersect(array_values(array_diff($nros, $enviadas)), $existentes));
+
+        $omitidas = count($nros) - count($aEncolar);
+
+        if ($aEncolar !== []) {
+            Bus::chain(array_map(
+                fn (string $nro) => new EnviarPendienteJob($nro),
+                $aEncolar
+            ))->dispatch();
+        }
+
         return response()->json([
-            'nrofactura' => $factura,
-            'enviado' => $enviado,
-            'respuesta' => $cuerpo,
+            'encoladas' => count($aEncolar),
+            'omitidas' => $omitidas,
         ]);
     }
 

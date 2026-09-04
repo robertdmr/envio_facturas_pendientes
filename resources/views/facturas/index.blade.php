@@ -66,11 +66,27 @@
         </div>
     </form>
 
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5">
+        <p class="text-sm text-indigo-900">
+            <span id="grupo-contador">0</span> factura(s) seleccionada(s) para enviar
+        </p>
+        <div class="flex items-center gap-2">
+            <button id="btn-enviar-grupo" type="button" disabled
+                    class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                Enviar seleccionadas
+            </button>
+        </div>
+    </div>
+    <p id="grupo-status" class="mb-3 hidden text-sm text-gray-600"></p>
+
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
+                        <th class="w-10 px-4 py-3">
+                            <input type="checkbox" id="check-todas" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" aria-label="Seleccionar todas las de la página">
+                        </th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-600">N° Factura</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Fecha</th>
                         <th class="px-4 py-3 text-left font-semibold text-gray-600">Cliente</th>
@@ -85,6 +101,10 @@
                 <tbody class="divide-y divide-gray-100">
                     @forelse ($facturas as $factura)
                         <tr class="hover:bg-gray-50">
+                            <td class="px-4 py-3">
+                                <input type="checkbox" class="js-fila rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                       data-nro="{{ $factura->NroFactura }}" aria-label="Seleccionar {{ $factura->NroFactura }}">
+                            </td>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <a href="{{ route('facturas.show', $factura->NroFactura) }}"
                                    class="font-medium text-indigo-600 hover:underline">
@@ -127,7 +147,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="px-4 py-10 text-center text-gray-500">
+                            <td colspan="10" class="px-4 py-10 text-center text-gray-500">
                                 No hay facturas que coincidan con los filtros.
                             </td>
                         </tr>
@@ -322,6 +342,65 @@
                         content.textContent = '';
                     }
                 });
+            });
+        })();
+    </script>
+
+    <script>
+        (() => {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+            const filas = document.querySelectorAll('.js-fila');
+            const master = document.getElementById('check-todas');
+            const contador = document.getElementById('grupo-contador');
+            const boton = document.getElementById('btn-enviar-grupo');
+            const estado = document.getElementById('grupo-status');
+
+            const actualizar = () => {
+                const n = Array.from(filas).filter((c) => c.checked).length;
+                contador.textContent = String(n);
+                boton.disabled = n === 0;
+                if (master) {
+                    master.checked = n > 0 && n === filas.length;
+                }
+            };
+
+            filas.forEach((c) => c.addEventListener('change', actualizar));
+            master?.addEventListener('change', () => {
+                filas.forEach((c) => { c.checked = master.checked; });
+                actualizar();
+            });
+
+            boton.addEventListener('click', async () => {
+                const nros = Array.from(filas).filter((c) => c.checked).map((c) => c.dataset.nro);
+                if (nros.length === 0) return;
+
+                boton.disabled = true;
+                estado.classList.remove('hidden');
+                estado.textContent = 'Encolando ' + nros.length + ' factura(s)…';
+
+                try {
+                    const res = await fetch('/pendientes/enviar', {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nrofacturas: nros }),
+                    });
+                    let data = null;
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        data = null;
+                    }
+                    if (!res.ok || !data) {
+                        throw new Error((data && data.message) || 'Error al encolar (' + res.status + ')');
+                    }
+                    estado.textContent = 'Se encolaron ' + data.encoladas
+                        + ' factura(s) · ' + data.omitidas + ' omitida(s) (ya enviadas o inexistentes). '
+                        + 'Ejecutá: php artisan queue:work --stop-when-empty';
+                } catch (err) {
+                    estado.textContent = err.message || 'Error inesperado';
+                } finally {
+                    boton.disabled = true;
+                }
             });
         })();
     </script>
