@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [FacturaController::class, 'index'])->name('facturas.index');
 
+Route::get('/facturas/exportar', [FacturaController::class, 'exportar'])->name('facturas.exportar');
+
 Route::get('/facturas/{factura}', [FacturaController::class, 'show'])->name('facturas.show');
 
 Route::post('/facturas/{factura}/json', [FacturaController::class, 'generarJson'])->name('facturas.generarJson');

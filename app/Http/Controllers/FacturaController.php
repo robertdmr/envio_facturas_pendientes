@@ -7,6 +7,7 @@ use App\Models\DetalleFactura;
 use App\Models\Factura;
 use App\Models\FacturaPendiente;
 use App\Services\EnvioEfacturaService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use RuntimeException;
@@ -15,43 +16,7 @@ class FacturaController extends Controller
 {
     public function index(Request $request)
     {
-        $facturas = Factura::query()
-            ->leftJoinSub(
-                DetalleFactura::query()
-                    ->select('NroFactura')
-                    ->selectRaw('COUNT(*) as items')
-                    ->selectRaw('COALESCE(SUM(Cantidad * PrecioVenta - descuento), 0) as total')
-                    ->whereNotNull('NroFactura')
-                    ->groupBy('NroFactura'),
-                'detalle',
-                'facturas.NroFactura',
-                '=',
-                'detalle.NroFactura'
-            )
-            ->leftJoin('clientes', 'clientes.IdCliente', '=', 'facturas.IdCliente')
-            ->when($request->filled('q'), function ($query) use ($request) {
-                $query->where('facturas.NroFactura', 'like', '%'.$request->string('q').'%');
-            })
-            ->when($request->filled('cliente'), function ($query) use ($request) {
-                $query->where('clientes.NombreEmpresa', 'like', '%'.$request->string('cliente').'%');
-            })
-            ->when($request->filled('tipo'), function ($query) use ($request) {
-                $query->where('facturas.TipoFactura', $request->string('tipo'));
-            })
-            ->when($this->filtroFechaValido($request, 'desde'), function ($query) use ($request) {
-                $query->whereDate('facturas.FechaFactura', '>=', $request->string('desde'));
-            })
-            ->when($this->filtroFechaValido($request, 'hasta'), function ($query) use ($request) {
-                $query->whereDate('facturas.FechaFactura', '<=', $request->string('hasta'));
-            })
-            ->select(
-                'facturas.*',
-                'detalle.items',
-                'detalle.total',
-                'clientes.NombreEmpresa as nombre_cliente'
-            )
-            ->orderByDesc('facturas.FechaFactura')
-            ->orderByDesc('facturas.NroFactura')
+        $facturas = $this->consultaFiltrada($request)
             ->paginate(10)
             ->withQueryString();
 
@@ -188,6 +153,96 @@ class FacturaController extends Controller
             'nrofactura' => $pendiente->nrofactura,
             'enviado' => (bool) $pendiente->enviado,
             'respuesta' => $pendiente->respuesta,
+        ]);
+    }
+
+    private function consultaFiltrada(Request $request): Builder
+    {
+        return Factura::query()
+            ->leftJoinSub(
+                DetalleFactura::query()
+                    ->select('NroFactura')
+                    ->selectRaw('COUNT(*) as items')
+                    ->selectRaw('COALESCE(SUM(Cantidad * PrecioVenta - descuento), 0) as total')
+                    ->whereNotNull('NroFactura')
+                    ->groupBy('NroFactura'),
+                'detalle',
+                'facturas.NroFactura',
+                '=',
+                'detalle.NroFactura'
+            )
+            ->leftJoin('clientes', 'clientes.IdCliente', '=', 'facturas.IdCliente')
+            ->when($request->filled('q'), function ($query) use ($request) {
+                $query->where('facturas.NroFactura', 'like', '%'.$request->string('q').'%');
+            })
+            ->when($request->filled('cliente'), function ($query) use ($request) {
+                $query->where('clientes.NombreEmpresa', 'like', '%'.$request->string('cliente').'%');
+            })
+            ->when($request->filled('tipo'), function ($query) use ($request) {
+                $query->where('facturas.TipoFactura', $request->string('tipo'));
+            })
+            ->when($this->filtroFechaValido($request, 'desde'), function ($query) use ($request) {
+                $query->whereDate('facturas.FechaFactura', '>=', $request->string('desde'));
+            })
+            ->when($this->filtroFechaValido($request, 'hasta'), function ($query) use ($request) {
+                $query->whereDate('facturas.FechaFactura', '<=', $request->string('hasta'));
+            })
+            ->select(
+                'facturas.*',
+                'detalle.items',
+                'detalle.total',
+                'clientes.NombreEmpresa as nombre_cliente'
+            )
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura');
+    }
+
+    public function exportar(Request $request)
+    {
+        $facturas = $this->consultaFiltrada($request)->get();
+
+        $pendientes = FacturaPendiente::query()
+            ->whereIn('nrofactura', $facturas->pluck('NroFactura'))
+            ->get()
+            ->keyBy('nrofactura');
+
+        $estado = function (Factura $factura) use ($pendientes): string {
+            $pendiente = $pendientes[$factura->NroFactura] ?? null;
+
+            if ($pendiente === null) {
+                return '';
+            }
+
+            return $pendiente->enviado ? 'Enviado' : 'Pendiente';
+        };
+
+        $filas = $facturas->map(fn (Factura $factura) => [
+            (string) $factura->NroFactura,
+            substr((string) $factura->FechaFactura, 0, 10),
+            (string) $factura->nombre_cliente,
+            (string) $factura->TipoFactura,
+            (string) $factura->SituFactura,
+            (int) $factura->items,
+            number_format((float) $factura->total, 2, '.', ''),
+            $estado($factura),
+        ]);
+
+        $escapar = static fn ($valor) => '"'.str_replace('"', '""', (string) $valor).'"';
+
+        $csv = "\xEF\xBB\xBF";
+        $csv .= implode(',', array_map($escapar, [
+            'N° Factura', 'Fecha', 'Cliente', 'Tipo', 'Situación', 'Ítems', 'Total', 'Estado',
+        ]))."\r\n";
+
+        foreach ($filas as $fila) {
+            $csv .= implode(',', array_map($escapar, $fila))."\r\n";
+        }
+
+        $nombre = 'facturas_'.date('Ymd_His').'.csv';
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$nombre.'"',
         ]);
     }
 
