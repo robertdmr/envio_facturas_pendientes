@@ -4,11 +4,26 @@ namespace Tests\Feature;
 
 use App\Models\DetalleFactura;
 use App\Models\Factura;
+use App\Models\FacturaPendiente;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class FacturaExportTest extends TestCase
 {
+    private function bdPendientes(): string
+    {
+        return (string) FacturaPendiente::query()->getConnection()->getDatabaseName();
+    }
+
+    private function nroConRegistro(): ?string
+    {
+        return DB::connection('puntopan')->table('facturas')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->value('facturas.NroFactura');
+    }
+
     public function test_export_returns_csv_with_expected_header(): void
     {
         $response = $this->get('/facturas/exportar');
@@ -96,5 +111,27 @@ class FacturaExportTest extends TestCase
 
         $response->assertOk();
         $this->assertStringContainsString($fragmentoEsperado, $response->getContent());
+    }
+
+    public function test_export_respects_estado_filter(): void
+    {
+        $sinEstado = DB::connection('puntopan')->table('facturas')
+            ->leftJoin($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->whereNull('fp.nrofactura')
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->value('facturas.NroFactura');
+        $conRegistro = $this->nroConRegistro();
+
+        $this->assertNotNull($sinEstado);
+        if ($conRegistro === null) {
+            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD de la app.');
+        }
+
+        $response = $this->get('/facturas/exportar?estado=sin');
+
+        $response->assertOk();
+        $this->assertStringContainsString('"'.$sinEstado.'"', $response->getContent());
+        $this->assertStringNotContainsString('"'.$conRegistro.'"', $response->getContent());
     }
 }

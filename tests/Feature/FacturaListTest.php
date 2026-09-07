@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Factura;
+use App\Models\FacturaPendiente;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -125,9 +126,10 @@ class FacturaListTest extends TestCase
             ->assertSeeInOrder([
                 'name="q"',
                 'name="tipo"',
+                'name="cliente"',
                 'name="desde"',
                 'name="hasta"',
-                'name="cliente"',
+                'name="estado"',
             ], false);
     }
 
@@ -137,5 +139,68 @@ class FacturaListTest extends TestCase
             ->assertOk()
             ->assertSee('Exportar a Excel')
             ->assertSee(route('facturas.exportar'), false);
+    }
+
+    public function test_index_filters_by_estado_enviado(): void
+    {
+        $enviado = $this->nroEnviado();
+        $sinEstado = $this->nroSinEstado();
+
+        $this->assertNotNull($sinEstado);
+        if ($enviado === null) {
+            $this->markTestSkipped('No hay facturas enviadas en la BD puntopan.');
+        }
+
+        $this->get('/?estado=enviado')
+            ->assertOk()
+            ->assertSee($enviado)
+            ->assertDontSee($sinEstado);
+    }
+
+    public function test_index_filters_by_estado_sin_estado(): void
+    {
+        $sinEstado = $this->nroSinEstado();
+
+        $this->assertNotNull($sinEstado);
+
+        $conRegistro = DB::connection('puntopan')->table('facturas')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->value('facturas.NroFactura');
+
+        if ($conRegistro === null) {
+            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD de la app.');
+        }
+
+        $this->get('/?estado=sin')
+            ->assertOk()
+            ->assertSee($sinEstado)
+            ->assertDontSee($conRegistro);
+    }
+
+    private function bdPendientes(): string
+    {
+        return (string) FacturaPendiente::query()->getConnection()->getDatabaseName();
+    }
+
+    private function nroSinEstado(): ?string
+    {
+        return DB::connection('puntopan')->table('facturas')
+            ->leftJoin($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->whereNull('fp.nrofactura')
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->value('facturas.NroFactura');
+    }
+
+    private function nroEnviado(): ?string
+    {
+        return DB::connection('puntopan')->table('facturas')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->where('fp.enviado', true)
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->value('facturas.NroFactura');
     }
 }
