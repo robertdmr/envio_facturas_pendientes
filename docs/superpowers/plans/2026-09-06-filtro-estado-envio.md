@@ -4,9 +4,9 @@
 
 **Goal:** Agregar al listado de facturas un filtro de Estado (Enviado / Pendiente / Sin estado) y repartir el form de filtros en dos líneas.
 
-**Architecture:** Se agrega un `leftJoin` contra `facturas_pendientes` en la query compartida `consultaFiltrada()` (usada por `index()` y `exportar()`) y un filtro `estado` (valores `enviado`/`pendiente`/`sin`). El controlador pasa `$estados` al view y el Blade agrega un `<select name="estado">`, distribuyendo los campos en dos líneas de tres con `xl:col-span-2`.
+**Architecture:** La query del listado corre contra la BD `puntopan`; `facturas_pendientes` vive en la BD de la app (`puntopan_app`, conexión default). En `consultaFiltrada()` (usada por `index()` y `exportar()`) se agrega, SOLO cuando el filtro `estado` viene lleno, un `leftJoin` cross-database hacia `facturas_pendientes` calificado con el nombre de BD derivado en runtime de la conexión default. El controlador pasa `$estados` al view y el Blade agrega un `<select name="estado">`, distribuyendo los campos en dos líneas de tres con `xl:col-span-2`.
 
-**Tech Stack:** Laravel 13 (PHP 8.3), Blade + Tailwind, MySQL (`puntopan`, solo lectura), PHPUnit 12 con tests de feature sobre BD real.
+**Tech Stack:** Laravel 13 (PHP 8.3), Blade + Tailwind, MySQL (`puntopan` solo lectura + `puntopan_app` app, mismo servidor), PHPUnit 12 con tests de feature sobre BD real.
 
 **Spec:** `docs/superpowers/specs/2026-09-06-filtro-estado-envio-design.md`
 
@@ -14,15 +14,15 @@
 
 ## File Structure
 
-- Modify: `app/Http/Controllers/FacturaController.php` — `consultaFiltrada()` (leftJoin + filtro `estado`) y pasar `$estados` en `index()`.
+- Modify: `app/Http/Controllers/FacturaController.php` — `consultaFiltrada()` (leftJoin cross-BD condicional + filtro `estado`) y pasar `$estados` en `index()`.
 - Modify: `resources/views/facturas/index.blade.php` — dos líneas de filtros + select "Estado".
 - Modify: `tests/Feature/FacturaListTest.php` — test de orden actualizado + tests de filtro por estado.
 - Modify: `tests/Feature/FacturaExportTest.php` — test de exportación con filtro de estado.
 
 Contexto del código actual:
-- `consultaFiltrada()` (FacturaController.php ~159-198): `leftJoinSub` de `DetalleFactura` → `leftJoin clientes` → filtros `q`, `cliente`, `tipo`, `desde`, `hasta` → `select` → orden. La usan `index()` (paginado) y `exportar()` (CSV).
+- `consultaFiltrada()` (FacturaController.php ~159-198): `leftJoinSub` de `DetalleFactura` → `leftJoin clientes` → filtros `q`, `cliente`, `tipo`, `desde`, `hasta` → `select` → orden. Corre contra la conexión `puntopan` (BD `puntopan`). La usan `index()` (paginado) y `exportar()` (CSV).
 - `index()` pasa al view: `facturas`, `tipos` (`['Contado','Credito']`), `pendientes`.
-- Tabla local `facturas_pendientes`: `nrofactura` (único), `enviado` (bool), `respuesta`. Estado Enviado = `enviado=1`; Pendiente = `enviado=0`; Sin estado = sin fila.
+- `facturas_pendientes` está en la BD de la app (`puntopan_app`, conexión default): columnas `nrofactura` (único), `enviado` (bool), `respuesta`. Estado Enviado = `enviado=1`; Pendiente = `enviado=0`; Sin estado = sin fila. Nombre de la BD: `FacturaPendiente::query()->getConnection()->getDatabaseName()` (NO hardcodear).
 - Form en `index.blade.php`: una línea, grid `xl:grid-cols-6`, orden actual q(2 cols) → tipo → desde → hasta → cliente.
 
 ---
@@ -43,14 +43,28 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 ```
 
-Agregar al final de la clase `FacturaListTest` (antes de la llave de cierre) estos dos helpers privados:
+Reemplazarlo por (agrega el import de `FacturaPendiente`):
 
 ```php
+use App\Models\Factura;
+use App\Models\FacturaPendiente;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+```
+
+Agregar al final de la clase `FacturaListTest` (antes de la llave de cierre) estos helpers privados:
+
+```php
+    private function bdPendientes(): string
+    {
+        return (string) FacturaPendiente::query()->getConnection()->getDatabaseName();
+    }
+
     private function nroSinEstado(): ?string
     {
         return DB::connection('puntopan')->table('facturas')
-            ->leftJoin('facturas_pendientes', 'facturas_pendientes.nrofactura', '=', 'facturas.NroFactura')
-            ->whereNull('facturas_pendientes.nrofactura')
+            ->leftJoin($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->whereNull('fp.nrofactura')
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
@@ -58,9 +72,9 @@ Agregar al final de la clase `FacturaListTest` (antes de la llave de cierre) est
 
     private function nroEnviado(): ?string
     {
-        return DB::connection('puntopan')->table('facturas_pendientes')
-            ->join('facturas', 'facturas.NroFactura', '=', 'facturas_pendientes.nrofactura')
-            ->where('facturas_pendientes.enviado', true)
+        return DB::connection('puntopan')->table('facturas')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->where('fp.enviado', true)
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
@@ -115,13 +129,13 @@ Agregar estos dos métodos a `FacturaListTest`:
         $this->assertNotNull($sinEstado);
 
         $conRegistro = DB::connection('puntopan')->table('facturas')
-            ->join('facturas_pendientes', 'facturas_pendientes.nrofactura', '=', 'facturas.NroFactura')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
 
         if ($conRegistro === null) {
-            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD puntopan.');
+            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD de la app.');
         }
 
         $this->get('/?estado=sin')
@@ -131,15 +145,39 @@ Agregar estos dos métodos a `FacturaListTest`:
     }
 ```
 
-- [ ] **Step 4: Agregar test de exportación con filtro de estado a `FacturaExportTest`**
+- [ ] **Step 4: Agregar helper y test de exportación a `FacturaExportTest`**
 
-En `tests/Feature/FacturaExportTest.php`, agregar este helper y método:
+En `tests/Feature/FacturaExportTest.php`, el `use` actual:
 
 ```php
+use App\Models\DetalleFactura;
+use App\Models\Factura;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+```
+
+Reemplazarlo por (agrega `FacturaPendiente`):
+
+```php
+use App\Models\DetalleFactura;
+use App\Models\Factura;
+use App\Models\FacturaPendiente;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+```
+
+Y agregar estos helpers/métodos a la clase:
+
+```php
+    private function bdPendientes(): string
+    {
+        return (string) FacturaPendiente::query()->getConnection()->getDatabaseName();
+    }
+
     private function nroConRegistro(): ?string
     {
         return DB::connection('puntopan')->table('facturas')
-            ->join('facturas_pendientes', 'facturas_pendientes.nrofactura', '=', 'facturas.NroFactura')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
@@ -148,8 +186,8 @@ En `tests/Feature/FacturaExportTest.php`, agregar este helper y método:
     public function test_export_respects_estado_filter(): void
     {
         $sinEstado = DB::connection('puntopan')->table('facturas')
-            ->leftJoin('facturas_pendientes', 'facturas_pendientes.nrofactura', '=', 'facturas.NroFactura')
-            ->whereNull('facturas_pendientes.nrofactura')
+            ->leftJoin($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->whereNull('fp.nrofactura')
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
@@ -157,7 +195,7 @@ En `tests/Feature/FacturaExportTest.php`, agregar este helper y método:
 
         $this->assertNotNull($sinEstado);
         if ($conRegistro === null) {
-            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD puntopan.');
+            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD de la app.');
         }
 
         $response = $this->get('/facturas/exportar?estado=sin');
@@ -171,10 +209,10 @@ En `tests/Feature/FacturaExportTest.php`, agregar este helper y método:
 - [ ] **Step 5: Ejecutar y verificar que fallan**
 
 Run: `php artisan test --filter=FacturaListTest`
-Expected: FAIL — el test de orden falla (el HTML aún no tiene `name="estado"` ni el nuevo orden) y los tests de estado fallan porque el filtro no se aplica (p. ej. `test_index_filters_by_estado_enviado` no excluye la factura sin estado).
+Expected: FAIL — el test de orden falla (el HTML aún no tiene `name="estado"` ni el nuevo orden) y los tests de estado fallan porque el filtro no se aplica (el listado incluye facturas con y sin registro).
 
 Run: `php artisan test --filter=FacturaExportTest`
-Expected: FAIL — `test_export_respects_estado_filter` incluye facturas con registro (el filtro no se aplica).
+Expected: FAIL — `test_export_respects_estado_filter` incluye facturas con registro (filtro no aplicado). Los demás tests de ese archivo siguen pasando.
 
 - [ ] **Step 6: Commit**
 
@@ -190,30 +228,32 @@ git commit -m "test: send-state filter red tests"
 **Files:**
 - Modify: `app/Http/Controllers/FacturaController.php`
 
-- [ ] **Step 1: Agregar el `leftJoin` y el filtro `estado` en `consultaFiltrada()`**
+- [ ] **Step 1: Agregar el filtro `estado` en `consultaFiltrada()`**
 
-En `app/Http/Controllers/FacturaController.php`, dentro de `consultaFiltrada()`, agregar el `leftJoin` de `facturas_pendientes` justo después del `leftJoin('clientes', ...)`:
-
-```php
-            ->leftJoin('clientes', 'clientes.IdCliente', '=', 'facturas.IdCliente')
-            ->leftJoin('facturas_pendientes', 'facturas_pendientes.nrofactura', '=', 'facturas.NroFactura')
-```
-
-Y agregar el filtro por `estado` justo después del `when` de `hasta` (antes del `select`):
+En `app/Http/Controllers/FacturaController.php`, dentro de `consultaFiltrada()`, justo después del `when` de `hasta` (antes del `select`), agregar:
 
 ```php
             ->when($request->filled('estado'), function ($query) use ($request) {
+                $tabla = FacturaPendiente::query()->getConnection()->getDatabaseName().'.facturas_pendientes as fp';
+
+                $query->leftJoin($tabla, 'fp.nrofactura', '=', 'facturas.NroFactura');
+
                 $estado = (string) $request->string('estado');
 
                 if ($estado === 'enviado') {
-                    $query->where('facturas_pendientes.enviado', true);
+                    $query->where('fp.enviado', true);
                 } elseif ($estado === 'pendiente') {
-                    $query->where('facturas_pendientes.enviado', false);
+                    $query->where('fp.enviado', false);
                 } elseif ($estado === 'sin') {
-                    $query->whereNull('facturas_pendientes.nrofactura');
+                    $query->whereNull('fp.nrofactura');
                 }
             })
 ```
+
+Notas:
+- `FacturaPendiente` ya está importada en el controlador (`use App\Models\FacturaPendiente;`). El `leftJoin` es **condicional**: solo se arma cuando `estado` viene lleno, de modo que listado y exportación normales no pagan el join cross-BD.
+- `FacturaPendiente::query()->getConnection()->getDatabaseName()` devuelve el nombre de la BD de la app (p. ej. `puntopan_app`), NO se hardcodea.
+- El join va hacia la BD de la app porque `facturas_pendientes` NO existe en la BD `puntopan` (donde corre la query).
 
 - [ ] **Step 2: Pasar `$estados` al view en `index()`**
 
@@ -241,7 +281,7 @@ Reemplazarlo por:
 - [ ] **Step 3: Ejecutar los tests del filtro de estado**
 
 Run: `php artisan test --filter=estado`
-Expected: PASS — `test_index_filters_by_estado_enviado`, `test_index_filters_by_estado_sin_estado`, `test_export_respects_estado_filter` ya pasan (el test de orden sigue en rojo hasta la Task 3).
+Expected: PASS — `test_index_filters_by_estado_enviado`, `test_index_filters_by_estado_sin_estado` y `test_export_respects_estado_filter` ya pasan (el test de orden sigue en rojo hasta la Task 3).
 
 - [ ] **Step 4: Commit**
 
