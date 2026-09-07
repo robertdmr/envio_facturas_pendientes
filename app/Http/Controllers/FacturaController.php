@@ -28,6 +28,7 @@ class FacturaController extends Controller
         return view('facturas.index', [
             'facturas' => $facturas,
             'tipos' => ['Contado', 'Credito'],
+            'estados' => ['enviado' => 'Enviado', 'pendiente' => 'Pendiente', 'sin' => 'Sin estado'],
             'pendientes' => $pendientes,
         ]);
     }
@@ -186,6 +187,21 @@ class FacturaController extends Controller
             })
             ->when($this->filtroFechaValido($request, 'hasta'), function ($query) use ($request) {
                 $query->whereDate('facturas.FechaFactura', '<=', $request->string('hasta'));
+            })
+            ->when($request->filled('estado'), function ($query) use ($request) {
+                $tabla = FacturaPendiente::query()->getConnection()->getDatabaseName().'.facturas_pendientes as fp';
+
+                $query->leftJoin($tabla, 'fp.nrofactura', '=', 'facturas.NroFactura');
+
+                $estado = (string) $request->string('estado');
+
+                if ($estado === 'enviado') {
+                    $query->where('fp.enviado', true);
+                } elseif ($estado === 'pendiente') {
+                    $query->where('fp.enviado', false);
+                } elseif ($estado === 'sin') {
+                    $query->whereNull('fp.nrofactura');
+                }
             })
             ->select(
                 'facturas.*',
