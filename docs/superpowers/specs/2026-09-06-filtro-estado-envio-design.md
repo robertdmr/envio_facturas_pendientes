@@ -51,6 +51,9 @@ Se agrega un nuevo filtro de **Estado** al listado de facturas, que permite acot
 Feature tests sobre la BD real (mismo patrón que el resto). Los helpers de test derivan el nombre de la BD de `facturas_pendientes` de la conexión default y consultan con join cross-BD calificado:
 
 1. `test_index_shows_filter_fields_in_expected_order` → se actualiza al nuevo orden DOM: `name="q"`, `name="tipo"`, `name="cliente"`, `name="desde"`, `name="hasta"`, `name="estado"`.
-2. `test_index_filters_by_estado_enviado` → con `?estado=enviado` aparecen facturas enviadas y no aparecen facturas sin estado. Se resuelve una factura enviada real desde la BD; si no existe ninguna, `markTestSkipped`.
-3. `test_index_filters_by_estado_sin_estado` → con `?estado=sin` aparecen facturas sin registro en `facturas_pendientes` y no aparece una factura con registro conocida.
-4. `test_export_respects_estado_filter` (en `FacturaExportTest`) → `GET /facturas/exportar?estado=sin` incluye una factura sin estado y excluye una con registro conocida; condicional a datos (skip si no hay casos).
+2. `test_index_filters_by_estado_enviado` → con `?estado=enviado` aparece la factura enviada más reciente y no aparece una factura sin estado que esté en la primera página del listado sin filtrar. Skips si no hay datos suficientes.
+3. `test_index_filters_by_estado_sin_estado` → con `?estado=sin` aparece la factura sin estado más reciente y no aparece una factura con registro que esté en la primera página sin filtrar. Skips si no hay datos suficientes.
+4. `test_index_filters_by_estado_pendiente` → análogo al de enviado (positivo: pendiente más reciente; negativo: factura sin estado de la primera página sin filtrar).
+5. `test_export_respects_estado_filter` (en `FacturaExportTest`) → `GET /facturas/exportar?estado=sin` incluye una factura sin estado y excluye una con registro conocida (exportación sin paginar ⇒ control negativo garantizado). Condicional a datos (skip si no hay casos).
+
+Para los tests de listado, el control negativo se toma **de la primera página sin filtrar** (los 10 registros más recientes según el orden del listado), de modo que, si el filtro no se aplicara, ese registro aparecería y el test fallaría (nunca queda "verde vacío").

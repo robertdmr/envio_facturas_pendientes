@@ -79,6 +79,42 @@ Agregar al final de la clase `FacturaListTest` (antes de la llave de cierre) est
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
     }
+
+    private function nroPendiente(): ?string
+    {
+        return DB::connection('puntopan')->table('facturas')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->where('fp.enviado', false)
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->value('facturas.NroFactura');
+    }
+
+    private function tieneRegistro(string $nro): bool
+    {
+        return FacturaPendiente::query()->where('nrofactura', $nro)->exists();
+    }
+
+    private function nrosPrimeraPagina(): array
+    {
+        return DB::connection('puntopan')->table('facturas')
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->limit(10)
+            ->pluck('NroFactura')
+            ->all();
+    }
+
+    private function nroEnPrimeraPagina(bool $conRegistro): ?string
+    {
+        foreach ($this->nrosPrimeraPagina() as $nro) {
+            if ($this->tieneRegistro($nro) === $conRegistro) {
+                return $nro;
+            }
+        }
+
+        return null;
+    }
 ```
 
 - [ ] **Step 2: Actualizar el test de orden de campos**
@@ -103,45 +139,59 @@ En `tests/Feature/FacturaListTest.php`, reemplazar el método `test_index_shows_
 
 - [ ] **Step 3: Agregar tests de filtro por estado a `FacturaListTest`**
 
-Agregar estos dos métodos a `FacturaListTest`:
+Agregar estos tres métodos a `FacturaListTest` (positivo = el más reciente de la clase, que es la fila 1 del listado filtrado; negativo = un registro de otra clase que esté en la primera página SIN filtrar, garantizando que el test sea rojo si el filtro no se aplica):
 
 ```php
     public function test_index_filters_by_estado_enviado(): void
     {
         $enviado = $this->nroEnviado();
-        $sinEstado = $this->nroSinEstado();
+        $sinEnPagina = $this->nroEnPrimeraPagina(false);
 
-        $this->assertNotNull($sinEstado);
         if ($enviado === null) {
-            $this->markTestSkipped('No hay facturas enviadas en la BD puntopan.');
+            $this->markTestSkipped('No hay facturas enviadas en facturas_pendientes.');
+        }
+        if ($sinEnPagina === null) {
+            $this->markTestSkipped('No hay facturas sin estado en la primera página del listado.');
         }
 
         $this->get('/?estado=enviado')
             ->assertOk()
             ->assertSee($enviado)
-            ->assertDontSee($sinEstado);
+            ->assertDontSee($sinEnPagina);
+    }
+
+    public function test_index_filters_by_estado_pendiente(): void
+    {
+        $pendiente = $this->nroPendiente();
+        $sinEnPagina = $this->nroEnPrimeraPagina(false);
+
+        if ($pendiente === null) {
+            $this->markTestSkipped('No hay facturas pendientes en facturas_pendientes.');
+        }
+        if ($sinEnPagina === null) {
+            $this->markTestSkipped('No hay facturas sin estado en la primera página del listado.');
+        }
+
+        $this->get('/?estado=pendiente')
+            ->assertOk()
+            ->assertSee($pendiente)
+            ->assertDontSee($sinEnPagina);
     }
 
     public function test_index_filters_by_estado_sin_estado(): void
     {
         $sinEstado = $this->nroSinEstado();
+        $conRegistroEnPagina = $this->nroEnPrimeraPagina(true);
 
         $this->assertNotNull($sinEstado);
-
-        $conRegistro = DB::connection('puntopan')->table('facturas')
-            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
-            ->orderByDesc('facturas.FechaFactura')
-            ->orderByDesc('facturas.NroFactura')
-            ->value('facturas.NroFactura');
-
-        if ($conRegistro === null) {
-            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD de la app.');
+        if ($conRegistroEnPagina === null) {
+            $this->markTestSkipped('No hay facturas con registro en la primera página del listado.');
         }
 
         $this->get('/?estado=sin')
             ->assertOk()
             ->assertSee($sinEstado)
-            ->assertDontSee($conRegistro);
+            ->assertDontSee($conRegistroEnPagina);
     }
 ```
 
@@ -209,7 +259,7 @@ Y agregar estos helpers/métodos a la clase:
 - [ ] **Step 5: Ejecutar y verificar que fallan**
 
 Run: `php artisan test --filter=FacturaListTest`
-Expected: FAIL — el test de orden falla (el HTML aún no tiene `name="estado"` ni el nuevo orden) y los tests de estado fallan porque el filtro no se aplica (el listado incluye facturas con y sin registro).
+Expected: FAIL — el test de orden falla (el HTML aún no tiene `name="estado"` ni el nuevo orden) y los 3 tests de estado fallan porque el filtro no se aplica (el listado incluye facturas con y sin registro).
 
 Run: `php artisan test --filter=FacturaExportTest`
 Expected: FAIL — `test_export_respects_estado_filter` incluye facturas con registro (filtro no aplicado). Los demás tests de ese archivo siguen pasando.
@@ -378,7 +428,7 @@ Nota: cada campo queda con `xl:col-span-2`, de modo que en `xl` el grid de 6 col
 - [ ] **Step 3: Ejecutar los tests y verificar que pasan**
 
 Run: `php artisan test --filter=FacturaListTest`
-Expected: PASS (9 tests: 7 existentes + 2 de estado, con el test de orden actualizado)
+Expected: PASS (10 tests: 7 existentes + 3 de estado, con el test de orden actualizado)
 
 Run: `php artisan test --filter=FacturaExportTest`
 Expected: PASS (6 tests)
