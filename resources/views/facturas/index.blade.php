@@ -26,9 +26,14 @@
                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
-                <label for="cliente" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</label>
-                <input type="text" id="cliente" name="cliente" value="{{ $cliente }}" placeholder="Nombre del cliente"
-                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <label for="tipo" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Tipo</label>
+                <select id="tipo" name="tipo"
+                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="">Todos</option>
+                    @foreach ($tipos as $opcion)
+                        <option value="{{ $opcion }}" @selected($tipo === $opcion)>{{ $opcion }}</option>
+                    @endforeach
+                </select>
             </div>
             <div>
                 <label for="desde" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Desde</label>
@@ -41,14 +46,9 @@
                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
             <div>
-                <label for="tipo" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Tipo</label>
-                <select id="tipo" name="tipo"
-                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                    <option value="">Todos</option>
-                    @foreach ($tipos as $opcion)
-                        <option value="{{ $opcion }}" @selected($tipo === $opcion)>{{ $opcion }}</option>
-                    @endforeach
-                </select>
+                <label for="cliente" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</label>
+                <input type="text" id="cliente" name="cliente" value="{{ $cliente }}" placeholder="Nombre del cliente"
+                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
         </div>
 
@@ -61,6 +61,10 @@
                 <button type="submit"
                         class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                     Filtrar
+                </button>
+                <button type="submit" formaction="{{ route('facturas.exportar') }}"
+                        class="rounded-lg border border-emerald-600 bg-white px-4 py-2 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
+                    Exportar a Excel
                 </button>
             </div>
         </div>

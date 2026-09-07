@@ -117,4 +117,25 @@ class FacturaListTest extends TestCase
             ->assertSee($fila->NroFactura)
             ->assertDontSee($otro->NroFactura);
     }
+
+    public function test_index_shows_filter_fields_in_expected_order(): void
+    {
+        $this->get('/')
+            ->assertOk()
+            ->assertSeeInOrder([
+                'name="q"',
+                'name="tipo"',
+                'name="desde"',
+                'name="hasta"',
+                'name="cliente"',
+            ], false);
+    }
+
+    public function test_index_shows_export_button_to_export_route(): void
+    {
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Exportar a Excel')
+            ->assertSee(route('facturas.exportar'), false);
+    }
 }
