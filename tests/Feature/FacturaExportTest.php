@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\DetalleFactura;
 use App\Models\Factura;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -74,5 +75,26 @@ class FacturaExportTest extends TestCase
 
         $response->assertOk();
         $this->assertStringContainsString('"'.str_replace('"', '""', $fila->NombreEmpresa).'"', $response->getContent());
+    }
+
+    public function test_export_emits_items_and_total_as_unquoted_integers(): void
+    {
+        $detalle = DetalleFactura::query()
+            ->select('NroFactura')
+            ->selectRaw('COUNT(*) as items')
+            ->selectRaw('COALESCE(SUM(Cantidad * PrecioVenta - descuento), 0) as total')
+            ->whereNotNull('NroFactura')
+            ->groupBy('NroFactura')
+            ->orderByDesc('total')
+            ->first();
+
+        $this->assertNotNull($detalle);
+
+        $fragmentoEsperado = ','.(int) $detalle->items.','.(int) round((float) $detalle->total).',';
+
+        $response = $this->get('/facturas/exportar?q='.urlencode($detalle->NroFactura));
+
+        $response->assertOk();
+        $this->assertStringContainsString($fragmentoEsperado, $response->getContent());
     }
 }

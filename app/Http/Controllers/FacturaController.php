@@ -223,19 +223,21 @@ class FacturaController extends Controller
             (string) $factura->TipoFactura,
             (string) $factura->SituFactura,
             (int) $factura->items,
-            number_format((float) $factura->total, 2, '.', ''),
+            (int) round((float) $factura->total),
             $estado($factura),
         ]);
 
-        $escapar = static fn ($valor) => '"'.str_replace('"', '""', (string) $valor).'"';
+        $celda = static fn ($valor) => is_int($valor)
+            ? (string) $valor
+            : '"'.str_replace('"', '""', (string) $valor).'"';
 
         $csv = "\xEF\xBB\xBF";
-        $csv .= implode(',', array_map($escapar, [
+        $csv .= implode(',', array_map($celda, [
             'N° Factura', 'Fecha', 'Cliente', 'Tipo', 'Situación', 'Ítems', 'Total', 'Estado',
         ]))."\r\n";
 
         foreach ($filas as $fila) {
-            $csv .= implode(',', array_map($escapar, $fila))."\r\n";
+            $csv .= implode(',', array_map($celda, $fila))."\r\n";
         }
 
         $nombre = 'facturas_'.date('Ymd_His').'.csv';
