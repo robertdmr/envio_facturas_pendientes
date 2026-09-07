@@ -9,6 +9,7 @@
     $desde = request()->query('desde', '');
     $hasta = request()->query('hasta', '');
     $tipo = request()->query('tipo', '');
+    $estadoFiltro = request()->query('estado', '');
 @endphp
 
 @section('content')
@@ -25,7 +26,7 @@
                 <input type="text" id="q" name="q" value="{{ $q }}" placeholder="001-001-0000000"
                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="xl:col-span-2">
                 <label for="tipo" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Tipo</label>
                 <select id="tipo" name="tipo"
                         class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
@@ -35,20 +36,30 @@
                     @endforeach
                 </select>
             </div>
-            <div>
+            <div class="xl:col-span-2">
+                <label for="cliente" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</label>
+                <input type="text" id="cliente" name="cliente" value="{{ $cliente }}" placeholder="Nombre del cliente"
+                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+            <div class="xl:col-span-2">
                 <label for="desde" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Desde</label>
                 <input type="date" id="desde" name="desde" value="{{ $desde }}"
                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
-            <div>
+            <div class="xl:col-span-2">
                 <label for="hasta" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Hasta</label>
                 <input type="date" id="hasta" name="hasta" value="{{ $hasta }}"
                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
             </div>
-            <div>
-                <label for="cliente" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Cliente</label>
-                <input type="text" id="cliente" name="cliente" value="{{ $cliente }}" placeholder="Nombre del cliente"
-                       class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            <div class="xl:col-span-2">
+                <label for="estado" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Estado</label>
+                <select id="estado" name="estado"
+                        class="block w-full rounded-lg border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="">Todos</option>
+                    @foreach ($estados as $valor => $etiqueta)
+                        <option value="{{ $valor }}" @selected($estadoFiltro === $valor)>{{ $etiqueta }}</option>
+                    @endforeach
+                </select>
             </div>
         </div>
 
