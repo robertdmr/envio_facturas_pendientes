@@ -144,39 +144,53 @@ class FacturaListTest extends TestCase
     public function test_index_filters_by_estado_enviado(): void
     {
         $enviado = $this->nroEnviado();
-        $sinEstado = $this->nroSinEstado();
+        $sinEnPagina = $this->nroEnPrimeraPagina(false);
 
-        $this->assertNotNull($sinEstado);
         if ($enviado === null) {
-            $this->markTestSkipped('No hay facturas enviadas en la BD puntopan.');
+            $this->markTestSkipped('No hay facturas enviadas en facturas_pendientes.');
+        }
+        if ($sinEnPagina === null) {
+            $this->markTestSkipped('No hay facturas sin estado en la primera página del listado.');
         }
 
         $this->get('/?estado=enviado')
             ->assertOk()
             ->assertSee($enviado)
-            ->assertDontSee($sinEstado);
+            ->assertDontSee($sinEnPagina);
+    }
+
+    public function test_index_filters_by_estado_pendiente(): void
+    {
+        $pendiente = $this->nroPendiente();
+        $sinEnPagina = $this->nroEnPrimeraPagina(false);
+
+        if ($pendiente === null) {
+            $this->markTestSkipped('No hay facturas pendientes en facturas_pendientes.');
+        }
+        if ($sinEnPagina === null) {
+            $this->markTestSkipped('No hay facturas sin estado en la primera página del listado.');
+        }
+
+        $this->get('/?estado=pendiente')
+            ->assertOk()
+            ->assertSee($pendiente)
+            ->assertDontSee($sinEnPagina);
     }
 
     public function test_index_filters_by_estado_sin_estado(): void
     {
         $sinEstado = $this->nroSinEstado();
+        $conRegistroEnPagina = $this->nroEnPrimeraPagina(true);
 
         $this->assertNotNull($sinEstado);
-
-        $conRegistro = DB::connection('puntopan')->table('facturas')
-            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
-            ->orderByDesc('facturas.FechaFactura')
-            ->orderByDesc('facturas.NroFactura')
-            ->value('facturas.NroFactura');
-
-        if ($conRegistro === null) {
-            $this->markTestSkipped('No hay facturas con registro en facturas_pendientes en la BD de la app.');
+        if ($conRegistroEnPagina === null) {
+            $this->markTestSkipped('No hay facturas con registro en la primera página del listado.');
         }
 
         $this->get('/?estado=sin')
             ->assertOk()
             ->assertSee($sinEstado)
-            ->assertDontSee($conRegistro);
+            ->assertDontSee($conRegistroEnPagina);
     }
 
     private function bdPendientes(): string
@@ -202,5 +216,41 @@ class FacturaListTest extends TestCase
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
+    }
+
+    private function nroPendiente(): ?string
+    {
+        return DB::connection('puntopan')->table('facturas')
+            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->where('fp.enviado', false)
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->value('facturas.NroFactura');
+    }
+
+    private function tieneRegistro(string $nro): bool
+    {
+        return FacturaPendiente::query()->where('nrofactura', $nro)->exists();
+    }
+
+    private function nrosPrimeraPagina(): array
+    {
+        return DB::connection('puntopan')->table('facturas')
+            ->orderByDesc('facturas.FechaFactura')
+            ->orderByDesc('facturas.NroFactura')
+            ->limit(10)
+            ->pluck('NroFactura')
+            ->all();
+    }
+
+    private function nroEnPrimeraPagina(bool $conRegistro): ?string
+    {
+        foreach ($this->nrosPrimeraPagina() as $nro) {
+            if ($this->tieneRegistro($nro) === $conRegistro) {
+                return $nro;
+            }
+        }
+
+        return null;
     }
 }
