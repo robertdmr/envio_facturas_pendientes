@@ -189,18 +189,14 @@ class FacturaController extends Controller
                 $query->whereDate('facturas.FechaFactura', '<=', $request->string('hasta'));
             })
             ->when($request->filled('estado'), function ($query) use ($request) {
-                $tabla = FacturaPendiente::query()->getConnection()->getDatabaseName().'.facturas_pendientes as fp';
-
-                $query->leftJoin($tabla, 'fp.nrofactura', '=', 'facturas.NroFactura');
-
                 $estado = (string) $request->string('estado');
 
                 if ($estado === 'enviado') {
-                    $query->where('fp.enviado', true);
+                    $query->whereIn('facturas.NroFactura', FacturaPendiente::query()->where('enviado', true)->pluck('nrofactura')->all());
                 } elseif ($estado === 'pendiente') {
-                    $query->where('fp.enviado', false);
+                    $query->whereIn('facturas.NroFactura', FacturaPendiente::query()->where('enviado', false)->pluck('nrofactura')->all());
                 } elseif ($estado === 'sin') {
-                    $query->whereNull('fp.nrofactura');
+                    $query->whereNotIn('facturas.NroFactura', FacturaPendiente::query()->pluck('nrofactura')->all());
                 }
             })
             ->select(

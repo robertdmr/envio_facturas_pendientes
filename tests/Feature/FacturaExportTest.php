@@ -10,15 +10,10 @@ use Tests\TestCase;
 
 class FacturaExportTest extends TestCase
 {
-    private function bdPendientes(): string
-    {
-        return (string) FacturaPendiente::query()->getConnection()->getDatabaseName();
-    }
-
     private function nroConRegistro(): ?string
     {
         return DB::connection('puntopan')->table('facturas')
-            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
+            ->whereIn('facturas.NroFactura', FacturaPendiente::query()->pluck('nrofactura')->all())
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
@@ -116,8 +111,7 @@ class FacturaExportTest extends TestCase
     public function test_export_respects_estado_filter(): void
     {
         $sinEstado = DB::connection('puntopan')->table('facturas')
-            ->leftJoin($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
-            ->whereNull('fp.nrofactura')
+            ->whereNotIn('facturas.NroFactura', FacturaPendiente::query()->pluck('nrofactura')->all())
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');

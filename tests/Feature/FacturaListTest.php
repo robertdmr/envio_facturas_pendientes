@@ -193,16 +193,10 @@ class FacturaListTest extends TestCase
             ->assertDontSee($conRegistroEnPagina);
     }
 
-    private function bdPendientes(): string
-    {
-        return (string) FacturaPendiente::query()->getConnection()->getDatabaseName();
-    }
-
     private function nroSinEstado(): ?string
     {
         return DB::connection('puntopan')->table('facturas')
-            ->leftJoin($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
-            ->whereNull('fp.nrofactura')
+            ->whereNotIn('facturas.NroFactura', FacturaPendiente::query()->pluck('nrofactura')->all())
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
@@ -211,8 +205,7 @@ class FacturaListTest extends TestCase
     private function nroEnviado(): ?string
     {
         return DB::connection('puntopan')->table('facturas')
-            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
-            ->where('fp.enviado', true)
+            ->whereIn('facturas.NroFactura', FacturaPendiente::query()->where('enviado', true)->pluck('nrofactura')->all())
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
@@ -221,8 +214,7 @@ class FacturaListTest extends TestCase
     private function nroPendiente(): ?string
     {
         return DB::connection('puntopan')->table('facturas')
-            ->join($this->bdPendientes().'.facturas_pendientes as fp', 'fp.nrofactura', '=', 'facturas.NroFactura')
-            ->where('fp.enviado', false)
+            ->whereIn('facturas.NroFactura', FacturaPendiente::query()->where('enviado', false)->pluck('nrofactura')->all())
             ->orderByDesc('facturas.FechaFactura')
             ->orderByDesc('facturas.NroFactura')
             ->value('facturas.NroFactura');
