@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\FacturaPendienteController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [FacturaController::class, 'index'])->name('facturas.index');
@@ -19,6 +20,12 @@ Route::get('/facturas/{factura}/respuesta', [FacturaController::class, 'respuest
 Route::post('/pendientes/enviar', [FacturaController::class, 'enviarPendientes'])->name('pendientes.enviar');
 
 Route::post('/pendientes/estado', [FacturaController::class, 'estadoPendientes'])->name('pendientes.estado');
+
+Route::get('/pendientes', [FacturaPendienteController::class, 'index'])->name('pendientes.index');
+
+Route::post('/pendientes/actualizar-cdc', [FacturaPendienteController::class, 'actualizarCdcLote'])->name('pendientes.actualizarCdcLote');
+
+Route::post('/pendientes/{nrofactura}/cdc', [FacturaPendienteController::class, 'actualizarCdc'])->name('pendientes.actualizarCdc');
 
 Route::get('/configuracion', [ConfiguracionController::class, 'edit'])->name('configuracion.edit');
 

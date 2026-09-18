@@ -16,4 +16,17 @@ class FacturaPendiente extends Model
             'enviado' => 'boolean',
         ];
     }
+
+    public function cdc(): ?string
+    {
+        $datos = json_decode((string) $this->respuesta, true);
+
+        if (! is_array($datos)) {
+            return null;
+        }
+
+        $cdc = $datos['cdc'] ?? null;
+
+        return is_string($cdc) && $cdc !== '' ? $cdc : null;
+    }
 }
