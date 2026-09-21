@@ -76,9 +76,10 @@
             <a href="{{ route('facturas.index') }}" class="text-base font-semibold text-gray-800">Facturas Puntopan</a>
         </header>
 
-        @php($puntopanAprobadoHasta = $puntopanConexion?->aprobadoHasta())
+        @php($puntopanHasta = ($puntopanConexion?->usandoCopiaLocal() ?? false) ?
+        $puntopanConexion->aprobacionEfectivaHasta() : null)
 
-        @if ($puntopanAprobadoHasta?->isFuture())
+        @if ($puntopanHasta)
         <div
             class="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-100 px-4 py-2.5 text-sm text-amber-900 sm:px-6 lg:px-8">
             <svg class="h-5 w-5 flex-none text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -90,7 +91,9 @@
                 Estás viendo la <span class="font-semibold">copia local</span> de puntopan
                 (<span class="font-mono">{{ $puntopanConexion->hostLocal() }}/{{ $puntopanConexion->baseLocal()
                     }}</span>),
-                que puede estar desactualizada. Aprobada hasta las {{ $puntopanAprobadoHasta->format('H:i') }}.
+                que puede estar desactualizada. Aprobada hasta las {{ $puntopanHasta->format('H:i') }}; los envíos en
+                cola
+                también usan esta copia.
             </p>
             <form method="POST" action="{{ route('puntopan.conexion-local.volver') }}">
                 @csrf

@@ -22,6 +22,9 @@ use Throwable;
  *
  * Nunca se pasa a la copia local en silencio: siempre hace falta aprobación
  * explícita (con caducidad) o el escape hatch `forzado` para desarrollo/tests.
+ * Hay dos aprobaciones del mismo operador: la del navegador (sesión) y la que
+ * se extiende al encolar un envío, para que el worker de la cola —que no tiene
+ * sesión— pueda ejecutarlo.
  */
 class PuntopanConexion
 {
@@ -37,6 +40,12 @@ class PuntopanConexion
 
     public const CLAVE_URL_PRETENDIDA = 'puntopan.url_pretendida';
 
+    /**
+     * Aprobación que alcanza a los procesos sin sesión (el worker de la cola).
+     * Vive en el cache (store `database`) para que cruce procesos y caduque sola.
+     */
+    public const CLAVE_COLA = 'puntopan:aprobacion:cola';
+
     private const CLAVE_SONDEO_REMOTO = 'puntopan:sondeo:remoto';
 
     private const CLAVE_SONDEO_LOCAL = 'puntopan:sondeo:local';
@@ -47,6 +56,10 @@ class PuntopanConexion
 
     /**
      * Estado actual de la conexión.
+     *
+     * El remoto se comprueba **antes** que la aprobación: la copia local es un
+     * respaldo, así que en cuanto el servidor remoto responde se vuelve a él
+     * aunque quede aprobación vigente.
      */
     public function estado(): string
     {
@@ -54,12 +67,12 @@ class PuntopanConexion
             return self::LOCAL_APROBADO;
         }
 
-        if ($this->aprobacionVigente() && $this->localDisponible()) {
-            return self::LOCAL_APROBADO;
-        }
-
         if ($this->remotoDisponible()) {
             return self::REMOTO_OK;
+        }
+
+        if ($this->aprobado() && $this->localDisponible()) {
+            return self::LOCAL_APROBADO;
         }
 
         if ($this->permitido() && $this->localDisponible()) {
@@ -92,7 +105,7 @@ class PuntopanConexion
         return (bool) Cache::remember(
             self::CLAVE_SONDEO_REMOTO,
             now()->addSeconds($this->ttlSondeo()),
-            fn(): bool => $this->sondeador->disponible(
+            fn (): bool => $this->sondeador->disponible(
                 $this->hostRemoto(),
                 $this->puertoRemoto(),
                 $this->timeoutSondeo(),
@@ -127,7 +140,7 @@ class PuntopanConexion
     }
 
     /**
-     * Aprobación vigente (o null si no hay sesión, no hay aprobación o caducó).
+     * Aprobación del navegador (o null si no hay sesión, no hay aprobación o caducó).
      */
     public function aprobadoHasta(): ?Carbon
     {
@@ -144,8 +157,55 @@ class PuntopanConexion
     }
 
     /**
-     * Registra la aprobación del operador. Devuelve false si no hay sesión
-     * (consola, colas), donde la aprobación no tiene sentido.
+     * Aprobación que alcanza a los procesos sin sesión (el worker de la cola).
+     */
+    public function aprobadoParaLaColaHasta(): ?Carbon
+    {
+        $hasta = Cache::get(self::CLAVE_COLA);
+
+        return $hasta ? Carbon::createFromTimestamp((int) $hasta) : null;
+    }
+
+    /**
+     * Hay alguna aprobación vigente: la del navegador o la que habilita la cola.
+     */
+    public function aprobado(): bool
+    {
+        return $this->aprobacionVigente()
+            || $this->aprobadoParaLaColaHasta()?->isFuture() === true;
+    }
+
+    /**
+     * La conexión efectiva es la copia local (lo que muestra el banner).
+     */
+    public function usandoCopiaLocal(): bool
+    {
+        return $this->estado() === self::LOCAL_APROBADO;
+    }
+
+    /**
+     * Hasta cuándo está aprobado el uso de la copia local, sea la aprobación del
+     * navegador o la de la cola (la más lejana de las dos).
+     */
+    public function aprobacionEfectivaHasta(): ?Carbon
+    {
+        $sesion = $this->aprobadoHasta();
+        $cola = $this->aprobadoParaLaColaHasta();
+
+        if ($sesion === null) {
+            return $cola;
+        }
+
+        if ($cola === null) {
+            return $sesion;
+        }
+
+        return $sesion->greaterThan($cola) ? $sesion : $cola;
+    }
+
+    /**
+     * Registra la aprobación del operador para su navegador. Devuelve false si no
+     * hay sesión (consola, colas), donde este tipo de aprobación no aplica.
      */
     public function aprobar(): bool
     {
@@ -161,11 +221,28 @@ class PuntopanConexion
     }
 
     /**
-     * Descarta la aprobación vigente y devuelve la conexión efectiva al remoto.
+     * Extiende la aprobación a los procesos sin sesión (el worker de la cola),
+     * con la misma caducidad. Es lo que permite que un envío encolado desde la
+     * copia local se pueda ejecutar.
+     */
+    public function aprobarParaLaCola(): Carbon
+    {
+        $hasta = now()->addSeconds($this->ttlAprobacion());
+
+        Cache::put(self::CLAVE_COLA, $hasta->getTimestamp(), $hasta);
+
+        return $hasta;
+    }
+
+    /**
+     * Descarta la aprobación vigente (del navegador y de la cola) y devuelve la
+     * conexión efectiva al remoto.
      */
     public function revocar(): void
     {
         $this->sesion()?->forget(self::CLAVE_SESION);
+
+        Cache::forget(self::CLAVE_COLA);
 
         $remoto = config('database.connections.puntopan_remoto');
 
@@ -221,6 +298,7 @@ class PuntopanConexion
             'forzado' => $this->forzado(),
             'ttl_aprobacion' => $this->ttlAprobacion(),
             'aprobado_hasta' => $this->aprobadoHasta(),
+            'aprobado_cola_hasta' => $this->aprobadoParaLaColaHasta(),
         ];
     }
 
@@ -275,8 +353,9 @@ class PuntopanConexion
     }
 
     /**
-     * La sesión no existe en consola ni en colas; ahí la aprobación interactiva
-     * no aplica y el respaldo solo puede venir de `forzado`.
+     * La sesión no existe en consola ni en colas; ahí solo puede haber
+     * aprobación del operador si alguien la extendió a la cola al encolar
+     * (o si el respaldo está `forzado`).
      */
     private function sesion(): ?Session
     {
@@ -296,8 +375,8 @@ class PuntopanConexion
         }
 
         Log::warning('puntopan: servidor remoto no disponible; se usa la copia local.', [
-            'remoto' => $this->hostRemoto() . ':' . $this->puertoRemoto(),
-            'local' => $this->hostLocal() . ':' . $this->puertoLocal(),
+            'remoto' => $this->hostRemoto().':'.$this->puertoRemoto(),
+            'local' => $this->hostLocal().':'.$this->puertoLocal(),
             'base' => $this->baseLocal(),
             'aprobado_hasta' => $this->aprobadoHasta()?->toDateTimeString(),
             'forzado' => $this->forzado(),

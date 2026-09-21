@@ -3,9 +3,13 @@
 namespace Tests\Feature;
 
 use App\Jobs\EnviarPendienteJob;
+use App\Models\Factura;
+use App\Models\FacturaPendiente;
 use App\Services\EnvioEfacturaService;
 use App\Services\PuntopanConexion;
 use App\Services\SondeadorTcp;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 use Tests\Support\SondeadorTcpFalso;
 use Tests\TestCase;
@@ -20,18 +24,36 @@ class PuntopanConexionLocalTest extends TestCase
 {
     private SondeadorTcpFalso $sondeador;
 
+    private string $nroExistente;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        // El TestCase arranca con la copia local aplicada, así que estas
+        // consultas salen de la copia local y dan un N° real y todavía sin
+        // enviar, para los tests de envío por lote.
+        $this->nroExistente = (string) Factura::query()
+            ->whereNotIn('NroFactura', FacturaPendiente::query()->pluck('nrofactura')->all())
+            ->value('NroFactura');
 
         $this->sondeador = new SondeadorTcpFalso;
 
         $this->app->instance(SondeadorTcp::class, $this->sondeador);
 
-        // El TestCase arranca con la copia local forzada (PUNTOPAN_FORCE_LOCAL);
-        // estos tests necesitan partir del escenario "servidor remoto".
+        // Estos tests necesitan partir del escenario "servidor remoto".
         config(['database.puntopan_respaldo.forzado' => false]);
         app(PuntopanConexion::class)->revocar();
+    }
+
+    /**
+     * Simula al worker de la cola: un proceso sin sesión ni aprobación previa.
+     */
+    private function comoWorker(): PuntopanConexion
+    {
+        $this->flushSession();
+
+        return app(PuntopanConexion::class);
     }
 
     public function test_estado_es_remoto_cuando_el_sondeo_responde(): void
@@ -164,6 +186,81 @@ class PuntopanConexionLocalTest extends TestCase
     {
         $this->postJson('/pendientes/enviar', ['nrofacturas' => ['001-001-0000001']])
             ->assertStatus(503)
-            ->assertJsonPath('message', fn(string $mensaje) => str_contains($mensaje, 'copia local'));
+            ->assertJsonPath('message', fn (string $mensaje) => str_contains($mensaje, 'copia local'));
+    }
+
+    public function test_la_aprobacion_del_navegador_no_alcanza_al_worker(): void
+    {
+        $this->post(route('puntopan.conexion-local.aprobar'));
+
+        // El worker es otro proceso: no ve la sesión del navegador.
+        $this->assertSame(PuntopanConexion::REQUIERE_APROBACION, $this->comoWorker()->estado());
+    }
+
+    public function test_el_worker_usa_la_copia_local_con_la_aprobacion_de_cola(): void
+    {
+        app(PuntopanConexion::class)->aprobarParaLaCola();
+
+        $this->assertSame(PuntopanConexion::LOCAL_APROBADO, $this->comoWorker()->estado());
+    }
+
+    public function test_la_aprobacion_de_cola_caducada_vuelve_a_pedirla(): void
+    {
+        Cache::put(PuntopanConexion::CLAVE_COLA, now()->subMinute()->getTimestamp(), 3600);
+
+        $this->assertSame(PuntopanConexion::REQUIERE_APROBACION, $this->comoWorker()->estado());
+    }
+
+    public function test_el_remoto_vuelve_a_ganar_en_cuanto_responde(): void
+    {
+        app(PuntopanConexion::class)->aprobarParaLaCola();
+
+        $this->sondeador->vivo = true;
+        app(PuntopanConexion::class)->olvidarSondeo();
+
+        $this->assertSame(PuntopanConexion::REMOTO_OK, $this->comoWorker()->estado());
+    }
+
+    public function test_el_envio_por_lote_exige_confirmacion_en_copia_local(): void
+    {
+        Bus::fake();
+
+        $this->post(route('puntopan.conexion-local.aprobar'));
+
+        $this->postJson('/pendientes/enviar', ['nrofacturas' => [$this->nroExistente]])
+            ->assertStatus(409)
+            ->assertJsonPath('requiere_confirmacion_local', true);
+
+        Bus::assertNothingDispatched();
+        $this->assertNull(app(PuntopanConexion::class)->aprobadoParaLaColaHasta());
+    }
+
+    public function test_confirmar_el_envio_en_copia_local_lo_habilita_para_el_worker(): void
+    {
+        Bus::fake();
+
+        $this->post(route('puntopan.conexion-local.aprobar'));
+
+        $this->postJson('/pendientes/enviar', [
+            'nrofacturas' => [$this->nroExistente],
+            'confirmar_local' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('encoladas', 1)
+            ->assertJsonPath('copia_local', true);
+
+        Bus::assertDispatched(EnviarPendienteJob::class);
+
+        $this->assertNotNull(app(PuntopanConexion::class)->aprobadoParaLaColaHasta());
+        $this->assertSame(PuntopanConexion::LOCAL_APROBADO, $this->comoWorker()->estado());
+    }
+
+    public function test_volver_al_remoto_revoca_la_aprobacion_de_cola(): void
+    {
+        app(PuntopanConexion::class)->aprobarParaLaCola();
+
+        $this->post(route('puntopan.conexion-local.volver'))->assertRedirect(route('facturas.index'));
+
+        $this->assertNull(app(PuntopanConexion::class)->aprobadoParaLaColaHasta());
     }
 }

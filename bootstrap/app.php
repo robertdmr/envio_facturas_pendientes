@@ -34,9 +34,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
             $conexion = app(PuntopanConexion::class);
 
-            // La copia local ya está aprobada y aun así falló: es un error real,
-            // que se muestre tal cual.
-            if ($conexion->aprobacionVigente()) {
+            // La copia local ya está aprobada (navegador o cola) y aun así falló:
+            // es un error real, que se muestre tal cual.
+            if ($conexion->aprobado()) {
                 return null;
             }
 

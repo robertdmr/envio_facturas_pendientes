@@ -173,6 +173,38 @@ El primer request de cada ventana de `PROBE_TTL` paga el timeout del sondeo
 (hasta ~2 s). El resto, instantáneo. Se acepta a cambio de que ninguna consulta
 se cuelgue esperando a un host inalcanzable.
 
+## Aprobación para la cola (2026-09-21)
+
+**Problema detectado en producción:** los envíos encolados desde la copia local
+fallaban siempre. El worker (`php artisan queue:work`) es **otro proceso, sin
+sesión**, así que no veía la aprobación del navegador: `EnviarPendienteJob` se
+encontraba en `REQUIERE_APROBACION` y lanzaba excepción. Como el job tiene
+`tries = 1` y va en cadena, el lote entero se perdía (0 filas en
+`facturas_pendientes`) sin que la UI lo advirtiera.
+
+**Solución:** una segunda aprobación, con la misma caducidad, que cruza
+procesos.
+
+- `PuntopanConexion::aprobarParaLaCola()` guarda en `Cache` (store `database`)
+  la marca `puntopan:aprobacion:cola`, que caduca sola.
+- `aprobado()` = aprobación del navegador **o** de la cola. `estado()` la usa.
+- `POST /pendientes/enviar` exige `confirmar_local: true` cuando la conexión
+  efectiva es la copia local; sin él responde **409** con
+  `requiere_confirmacion_local` y no encola nada. Con el flag, y solo si hay
+  algo que encolar, extiende la aprobación al worker.
+- La UI (`facturas/index.blade.php`) traduce ese 409 a un `confirm()` explícito
+  que dice cuántos comprobantes se van a enviar leyendo la copia local.
+- `revocar()` (botón "Volver al servidor remoto") descarta las dos aprobaciones.
+- `estado()` comprueba el **remoto primero**: en cuanto el servidor responde se
+  vuelve a él aunque quede aprobación vigente. El banner usa
+  `usandoCopiaLocal()`, así que también avisa cuando la copia se está usando por
+  una aprobación de cola y no por la sesión de quien mira.
+
+Efecto secundario pendiente de decidir: mientras la copia local esté en uso, las
+actualizaciones de CDC (`POST /pendientes/{nro}/cdc`) se escriben en la copia
+local, no en el servidor remoto. Es un cambio de datos sobre un espejo y merece
+su propia decisión.
+
 ## Notas
 
 - La regla de oro se mantiene: la copia local también es de solo lectura salvo la

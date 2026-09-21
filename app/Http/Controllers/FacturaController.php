@@ -7,6 +7,7 @@ use App\Models\DetalleFactura;
 use App\Models\Factura;
 use App\Models\FacturaPendiente;
 use App\Services\EnvioEfacturaService;
+use App\Services\PuntopanConexion;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
@@ -94,9 +95,25 @@ class FacturaController extends Controller
         $validated = $request->validate([
             'nrofacturas' => ['required', 'array', 'min:1'],
             'nrofacturas.*' => ['required', 'string', 'max:255'],
+            'confirmar_local' => ['nullable', 'boolean'],
         ]);
 
         $nros = array_values(array_unique($validated['nrofacturas']));
+
+        $conexion = app(PuntopanConexion::class);
+        $enCopiaLocal = $conexion->usandoCopiaLocal();
+
+        // En la copia local los envíos necesitan consentimiento explícito: el
+        // worker no tiene sesión y va a preparar los comprobantes leyendo una
+        // base que puede estar desactualizada. Con `forzado` no se pregunta: esa
+        // ya es una decisión explícita de configuración (desarrollo y tests).
+        if ($enCopiaLocal && ! $conexion->forzado() && ! $request->boolean('confirmar_local')) {
+            return response()->json([
+                'message' => 'Estás trabajando con la copia local de puntopan: confirmá el envío contra la copia local para continuar.',
+                'requiere_confirmacion_local' => true,
+                'aprobado_hasta' => $conexion->aprobacionEfectivaHasta()?->format('H:i'),
+            ], 409);
+        }
 
         $enviadas = FacturaPendiente::query()
             ->whereIn('nrofactura', $nros)
@@ -114,6 +131,12 @@ class FacturaController extends Controller
         $omitidas = count($nros) - count($aEncolar);
 
         if ($aEncolar !== []) {
+            if ($enCopiaLocal && ! $conexion->forzado()) {
+                // Sin esto el worker no puede leer puntopan: la aprobación del
+                // navegador no cruza a procesos sin sesión.
+                $conexion->aprobarParaLaCola();
+            }
+
             Bus::chain(array_map(
                 fn (string $nro) => new EnviarPendienteJob($nro),
                 $aEncolar
@@ -124,6 +147,7 @@ class FacturaController extends Controller
             'encoladas' => count($aEncolar),
             'omitidas' => $omitidas,
             'nros' => $aEncolar,
+            'copia_local' => $enCopiaLocal,
         ]);
     }
 
@@ -245,7 +269,14 @@ class FacturaController extends Controller
 
         $csv = "\xEF\xBB\xBF";
         $csv .= implode(',', array_map($celda, [
-            'N° Factura', 'Fecha', 'Cliente', 'Tipo', 'Situación', 'Ítems', 'Total', 'Estado',
+            'N° Factura',
+            'Fecha',
+            'Cliente',
+            'Tipo',
+            'Situación',
+            'Ítems',
+            'Total',
+            'Estado',
         ]))."\r\n";
 
         foreach ($filas as $fila) {
