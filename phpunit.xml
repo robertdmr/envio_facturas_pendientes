@@ -29,5 +29,11 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            La suite corre contra la copia local de `puntopan` (127.0.0.1), no
+            contra el servidor remoto, que solo es alcanzable desde la red de la
+            oficina. Poné false para probar contra el remoto.
+        -->
+        <env name="PUNTOPAN_FORCE_LOCAL" value="true"/>
     </php>
 </phpunit>

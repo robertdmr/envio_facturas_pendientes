@@ -3,6 +3,42 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+/*
+|--------------------------------------------------------------------------
+| Definición intacta del servidor remoto de `puntopan`
+|--------------------------------------------------------------------------
+|
+| La conexión `puntopan` es la "efectiva": arranca apuntando al remoto y puede
+| ser reescrita en runtime por App\Services\PuntopanConexion::aplicarLocal()
+| para leer la copia local. `puntopan_remoto` conserva la definición original,
+| que nunca se toca, de modo que los sondeos y el regreso al remoto siempre
+| tienen datos fiables (incluso en procesos de larga vida como queue:work).
+|
+*/
+
+$puntopanRemoto = [
+    'driver' => 'mysql',
+    'url' => env('PUNTOPAN_DB_URL'),
+    'host' => env('PUNTOPAN_DB_HOST', '127.0.0.1'),
+    'port' => env('PUNTOPAN_DB_PORT', '3306'),
+    'database' => env('PUNTOPAN_DB_DATABASE', 'puntopan'),
+    'username' => env('PUNTOPAN_DB_USERNAME', 'root'),
+    'password' => env('PUNTOPAN_DB_PASSWORD', ''),
+    'unix_socket' => env('PUNTOPAN_DB_SOCKET', ''),
+    'charset' => env('DB_CHARSET', 'utf8mb4'),
+    'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+    'prefix' => '',
+    'prefix_indexes' => true,
+    'strict' => true,
+    'engine' => null,
+    'options' => extension_loaded('pdo_mysql') ? array_filter([
+        Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+        // Falla rápido cuando el host remoto es inalcanzable en lugar de esperar
+        // el timeout del sistema operativo.
+        PDO::ATTR_TIMEOUT => (int) env('PUNTOPAN_PROBE_TIMEOUT', 2),
+    ]) : [],
+];
+
 return [
 
     /*
@@ -64,15 +100,27 @@ return [
             ]) : [],
         ],
 
-        'puntopan' => [
+        // Definición original del remoto: nunca se reescribe.
+        'puntopan_remoto' => $puntopanRemoto,
+
+        // Conexión efectiva que usan los modelos y DB::connection('puntopan').
+        'puntopan' => $puntopanRemoto,
+
+        /*
+         * Copia local de `puntopan` (mismo MySQL que la app). Solo se usa si el
+         * operador aprueba explícitamente el respaldo (ver PuntopanConexion).
+         * Reutiliza las credenciales de la conexión por defecto (DB_*) y cambia
+         * únicamente el nombre de la base.
+         */
+        'puntopan_fallback' => [
             'driver' => 'mysql',
-            'url' => env('PUNTOPAN_DB_URL'),
-            'host' => env('PUNTOPAN_DB_HOST', '127.0.0.1'),
-            'port' => env('PUNTOPAN_DB_PORT', '3306'),
-            'database' => env('PUNTOPAN_DB_DATABASE', 'puntopan'),
-            'username' => env('PUNTOPAN_DB_USERNAME', 'root'),
-            'password' => env('PUNTOPAN_DB_PASSWORD', ''),
-            'unix_socket' => env('PUNTOPAN_DB_SOCKET', ''),
+            'url' => env('DB_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '3306'),
+            'database' => env('PUNTOPAN_LOCAL_DB_DATABASE', 'puntopan'),
+            'username' => env('DB_USERNAME', 'root'),
+            'password' => env('DB_PASSWORD', ''),
+            'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
             'prefix' => '',
@@ -134,6 +182,32 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Respaldo local de `puntopan`
+    |--------------------------------------------------------------------------
+    |
+    | Ajustes del respaldo a la copia local de `puntopan`. Nunca se activa solo:
+    | requiere aprobación explícita del operador (con caducidad) o el escape
+    | hatch `forzado` para desarrollo y tests.
+    |
+    | - permitido:      si es false, jamás se ofrece la copia local.
+    | - forzado:        usa la copia local sin sondeo ni aprobación.
+    | - ttl_aprobacion: segundos de vigencia de una aprobación del operador.
+    | - ttl_sondeo:     segundos que se recuerda el resultado de un sondeo.
+    | - timeout_sondeo: segundos máximos de espera del sondeo TCP.
+    |
+    */
+
+    'puntopan_respaldo' => [
+        'permitido' => (bool) env('PUNTOPAN_ALLOW_LOCAL', true),
+        'forzado' => (bool) env('PUNTOPAN_FORCE_LOCAL', false),
+        'ttl_aprobacion' => (int) env('PUNTOPAN_LOCAL_APPROVAL_TTL', 3600),
+        'ttl_sondeo' => (int) env('PUNTOPAN_PROBE_TTL', 30),
+        'timeout_sondeo' => (int) env('PUNTOPAN_PROBE_TIMEOUT', 2),
+        'base_local' => env('PUNTOPAN_LOCAL_DB_DATABASE', 'puntopan'),
     ],
 
     /*
